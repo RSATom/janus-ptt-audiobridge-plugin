@@ -1,0 +1,51 @@
+name: janus-plus-ptt-audioroom-plugin
+base: core20
+version: git
+summary: Janus Gateway with PTT Audio Room plugin
+description: |
+  Janus Gateway with embedded PTT Audio Room plugin.
+license: GPL-3.0
+grade: devel
+confinement: strict
+
+architectures:
+  - build-on: amd64
+
+layout:
+  /opt/janus/etc/janus:
+    bind: $SNAP_COMMON/etc
+  /opt/janus/share/janus/recordings:
+    bind: $SNAP_COMMON/share/recordings
+  /opt/janus/share/janus/demos/voicemail:
+    bind: $SNAP_COMMON/share/voicemail
+  /opt/janus/lib/janus:
+    bind: $SNAP/opt/janus/lib/janus
+  /opt/janus/share/janus/streams:
+    bind: $SNAP/opt/janus/share/janus/streams
+
+parts:
+  plugin:
+    plugin: cmake
+    source: .
+    cmake-parameters:
+      - -DCMAKE_FIND_ROOT_PATH=/snap/janus-gateway/current
+    build-snaps:
+      - janus-gateway
+    build-packages:
+      - pkg-config
+      - g++
+      - make
+      - libglib2.0-dev
+      - libjansson-dev
+      - libopus-dev
+      - libssl-dev
+    stage-snaps:
+      - janus-gateway
+
+apps:
+  janus-gateway:
+    command: opt/janus/bin/janus -o
+    daemon: simple
+    plugs:
+      - network-bind
+      - network
