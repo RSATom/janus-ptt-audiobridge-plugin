@@ -1057,10 +1057,10 @@ room-<unique room ID>: {
 /* Plugin information */
 #define JANUS_AUDIOBRIDGE_VERSION			12
 #define JANUS_AUDIOBRIDGE_VERSION_STRING	"0.0.12"
-#define JANUS_AUDIOBRIDGE_DESCRIPTION		"This is a plugin implementing an audio conference bridge for Janus, mixing Opus streams."
-#define JANUS_AUDIOBRIDGE_NAME				"JANUS AudioBridge plugin"
-#define JANUS_AUDIOBRIDGE_AUTHOR			"Meetecho s.r.l."
-#define JANUS_AUDIOBRIDGE_PACKAGE			"janus.plugin.audiobridge"
+#define JANUS_AUDIOBRIDGE_DESCRIPTION		""
+#define JANUS_AUDIOBRIDGE_NAME				"JANUS PTT Audio Room plugin"
+#define JANUS_AUDIOBRIDGE_AUTHOR			"Meetecho s.r.l. && Sergey Radionov <rsatom@gmail.com>"
+#define JANUS_AUDIOBRIDGE_PACKAGE			"janus.plugin.ptt-audioroom"
 
 #define MIN_SEQUENTIAL 						2
 #define MAX_MISORDER						50
