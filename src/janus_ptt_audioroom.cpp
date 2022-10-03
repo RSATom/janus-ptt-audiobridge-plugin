@@ -439,7 +439,7 @@ static void janus_audiobridge_room_free(const janus_refcount *audiobridge_ref) {
 	if(audiobridge->rtp_encoder)
 		opus_encoder_destroy(audiobridge->rtp_encoder);
 	g_hash_table_destroy(audiobridge->rtp_forwarders);
-	g_free(audiobridge);
+	delete audiobridge;
 }
 
 static void janus_audiobridge_message_free(janus_audiobridge_message *msg) {
@@ -1096,7 +1096,7 @@ int janus_audiobridge_init(janus_callbacks *callback, const char *config_path) {
 				continue;
 			}
 			/* Create the AudioBridge room */
-			janus_audiobridge_room *audiobridge = (janus_audiobridge_room *)g_malloc0(sizeof(janus_audiobridge_room));
+			janus_audiobridge_room *audiobridge = new janus_audiobridge_room {};
 			janus_refcount_init(&audiobridge->ref, janus_audiobridge_room_free);
 			const char *room_num = cat->name;
 			if(strstr(room_num, "room-") == room_num)
@@ -1687,7 +1687,7 @@ static json_t *janus_audiobridge_process_synchronous_request(janus_audiobridge_s
 			}
 		}
 		/* Create the AudioBridge room */
-		janus_audiobridge_room *audiobridge = (janus_audiobridge_room *)g_malloc0(sizeof(janus_audiobridge_room));
+		janus_audiobridge_room *audiobridge = new janus_audiobridge_room {};
 		janus_refcount_init(&audiobridge->ref, janus_audiobridge_room_free);
 		/* Generate a random ID, if needed */
 		gboolean room_id_allocated = FALSE;
