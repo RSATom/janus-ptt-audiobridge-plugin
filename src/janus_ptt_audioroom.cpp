@@ -50,8 +50,6 @@ extern "C" {
 #define MIN_SEQUENTIAL 						2
 #define MAX_MISORDER						50
 
-#define JANUS_AUDIOBRIDGE_MAX_GROUPS		5
-
 static const gint64 PTT_NO_AUDIO_TIMEOUT = 5; // seconds
 
 /* Plugin methods */
@@ -137,9 +135,6 @@ static struct janus_json_parameter idstr_parameters[] = {
 static struct janus_json_parameter idstropt_parameters[] = {
 	{"id", JSON_STRING, 0}
 };
-static struct janus_json_parameter group_parameters[] = {
-	{"group", JSON_STRING, JANUS_JSON_PARAM_REQUIRED}
-};
 static struct janus_json_parameter create_parameters[] = {
 	{"description", JSON_STRING, 0},
 	{"secret", JSON_STRING, 0},
@@ -159,7 +154,6 @@ static struct janus_json_parameter create_parameters[] = {
 	{"default_prebuffering", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"default_expectedloss", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"default_bitrate", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
-	{"groups", JSON_ARRAY, 0}
 };
 static struct janus_json_parameter edit_parameters[] = {
 	{"secret", JSON_STRING, 0},
@@ -184,7 +178,6 @@ static struct janus_json_parameter secret_parameters[] = {
 static struct janus_json_parameter join_parameters[] = {
 	{"display", JSON_STRING, 0},
 	{"token", JSON_STRING, 0},
-	{"group", JSON_STRING, 0},
 	{"codec", JSON_STRING, 0},
 	{"prebuffer", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"bitrate", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
@@ -207,14 +200,12 @@ static struct janus_json_parameter configure_parameters[] = {
 	{"quality", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"expected_loss", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"volume", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
-	{"group", JSON_STRING, 0},
 	{"spatial_position", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"display", JSON_STRING, 0},
 	{"generate_offer", JANUS_JSON_BOOL, 0},
 	{"update", JANUS_JSON_BOOL, 0}
 };
 static struct janus_json_parameter rtp_forward_parameters[] = {
-	{"group", JSON_STRING, 0},
 	{"ssrc", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"codec", JSON_STRING, 0},
 	{"ptype", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
@@ -293,8 +284,6 @@ typedef struct janus_audiobridge_room {
 	gint destroyed;	/* Whether this room has been destroyed */
 	janus_mutex mutex;			/* Mutex to lock this room instance */
 	/* RTP forwarders for this room's mix */
-	GHashTable *groups;			/* Forwarding groups supported in this room, indexed by name */
-	GHashTable *groups_byid;	/* Forwarding groups supported in this room, indexed by numeric ID */
 	GHashTable *rtp_forwarders;	/* RTP forwarders list (as a hashmap) */
 	OpusEncoder *rtp_encoder;	/* Opus encoder instance to use for all RTP forwarders */
 	janus_mutex rtp_mutex;		/* Mutex to lock the RTP forwarders list */
@@ -369,7 +358,6 @@ typedef struct janus_audiobridge_participant {
 	gboolean mjr_active;		/* Whether this participant has to be recorded to an mjr file or not */
 	gchar *mjr_base;			/* Base name for the mjr recording (e.g., /path/to/filename, will generate /path/to/filename-audio.mjr) */
 	janus_recorder *arc;		/* The Janus recorder instance for this user's audio, if enabled */
-	uint group;					/* Forwarding group index, if enabled in the room */
 	janus_mutex rec_mutex;		/* Mutex to protect the recorder from race conditions */
 	gint destroyed;	/* Whether this room has been destroyed */
 	janus_refcount ref;			/* Reference counter for this participant */
@@ -469,10 +457,6 @@ static void janus_audiobridge_room_free(const janus_refcount *audiobridge_ref) {
 	if(audiobridge->rtp_encoder)
 		opus_encoder_destroy(audiobridge->rtp_encoder);
 	g_hash_table_destroy(audiobridge->rtp_forwarders);
-	if(audiobridge->groups)
-		g_hash_table_destroy(audiobridge->groups);
-	if(audiobridge->groups_byid)
-		g_hash_table_destroy(audiobridge->groups_byid);
 	g_free(audiobridge);
 }
 
@@ -511,7 +495,6 @@ typedef struct janus_audiobridge_rtp_forwarder {
 	int payload_type;
 	uint16_t seq_number;
 	uint32_t timestamp;
-	uint group;
 	gboolean always_on;
 	/* Only needed for SRTP forwarders */
 	gboolean is_srtp;
@@ -535,7 +518,7 @@ static void janus_audiobridge_rtp_forwarder_free(const janus_refcount *f_ref) {
 	g_free(rf);
 }
 static guint32 janus_audiobridge_rtp_forwarder_add_helper(janus_audiobridge_room *room,
-		uint group, const gchar *host, uint16_t port, uint32_t ssrc, int pt,
+		const gchar *host, uint16_t port, uint32_t ssrc, int pt,
 		janus_audiocodec codec, int srtp_suite, const char *srtp_crypto,
 		gboolean always_on, guint32 stream_id) {
 	if(room == NULL || host == NULL)
@@ -595,7 +578,6 @@ static guint32 janus_audiobridge_rtp_forwarder_add_helper(janus_audiobridge_room
 		rf->payload_type = 0;
 	rf->seq_number = 0;
 	rf->timestamp = 0;
-	rf->group = group;
 	rf->always_on = always_on;
 
 	janus_mutex_lock(&room->rtp_mutex);
@@ -943,19 +925,6 @@ static int janus_audiobridge_create_static_rtp_forwarder(janus_config_category *
 		}
 	}
 
-	/* If this room uses groups, check if a valid group name was provided */
-	uint group = 0;
-	if(audiobridge->groups != NULL) {
-		janus_config_item *group_name = janus_config_get(config, cat, janus_config_type_item, "rtp_forward_group");
-		if(group_name != NULL && group_name->value != NULL) {
-			group = GPOINTER_TO_UINT(g_hash_table_lookup(audiobridge->groups, group_name->value));
-			if(group == 0) {
-				JANUS_LOG(LOG_ERR, "Invalid group name (%s)\n", group_name->value);
-				return 0;
-			}
-		}
-	}
-
 	janus_config_item *port_item = janus_config_get(config, cat, janus_config_type_item, "rtp_forward_port");
 	uint16_t port = 0;
 	if(port_item != NULL && port_item->value != NULL && janus_string_to_uint16(port_item->value, &port) < 0) {
@@ -1053,7 +1022,7 @@ static int janus_audiobridge_create_static_rtp_forwarder(janus_config_category *
 		return -1;
 	}
 
-	janus_audiobridge_rtp_forwarder_add_helper(audiobridge, group,
+	janus_audiobridge_rtp_forwarder_add_helper(audiobridge,
 		host, port, ssrc_value, ptype, codec, srtp_suite, srtp_crypto,
 		always_on, forwarder_id);
 
@@ -1143,7 +1112,6 @@ int janus_audiobridge_init(janus_callbacks *callback, const char *config_path) {
 			janus_config_item *default_bitrate = janus_config_get(config, cat, janus_config_type_item, "default_bitrate");
 			janus_config_item *secret = janus_config_get(config, cat, janus_config_type_item, "secret");
 			janus_config_item *pin = janus_config_get(config, cat, janus_config_type_item, "pin");
-			janus_config_array *groups = janus_config_get(config, cat, janus_config_type_array, "groups");
 			janus_config_item *mjrs = janus_config_get(config, cat, janus_config_type_item, "mjrs");
 			janus_config_item *mjrsdir = janus_config_get(config, cat, janus_config_type_item, "mjrs_dir");
 			if(sampling == NULL || sampling->value == NULL) {
@@ -1277,42 +1245,6 @@ int janus_audiobridge_init(janus_callbacks *callback, const char *config_path) {
 				(GDestroyNotify)g_free, (GDestroyNotify)janus_audiobridge_participant_unref);
 			audiobridge->check_tokens = FALSE;	/* Static rooms can't have an "allowed" list yet, no hooks to the configuration file */
 			audiobridge->allowed = g_hash_table_new_full(g_str_hash, g_str_equal, (GDestroyNotify)g_free, NULL);
-			if(groups != NULL) {
-				/* Populate the group hashtable, and create the related indexes */
-				GList *gl = groups->list;
-				if(g_list_length(gl) > JANUS_AUDIOBRIDGE_MAX_GROUPS) {
-					JANUS_LOG(LOG_ERR, "Too many groups specified in room %s (max %d allowed)\n", room_num, JANUS_AUDIOBRIDGE_MAX_GROUPS);
-					janus_refcount_decrease(&audiobridge->ref);
-					cl = cl->next;
-				}
-				int count = 0;
-				audiobridge->groups = g_hash_table_new_full(g_str_hash, g_str_equal, (GDestroyNotify)g_free, NULL);
-				audiobridge->groups_byid = g_hash_table_new_full(NULL, NULL, NULL, (GDestroyNotify)g_free);
-				while(gl) {
-					janus_config_item *g = (janus_config_item *)gl->data;
-					if(g == NULL || g->type != janus_config_type_item || g->name != NULL || g->value == NULL) {
-						JANUS_LOG(LOG_WARN, "  -- Invalid group item (not a string?), skipping in '%s'...\n", cat->name);
-						gl = gl->next;
-						continue;
-					}
-					const char *name = g->value;
-					if(g_hash_table_lookup(audiobridge->groups, name)) {
-						JANUS_LOG(LOG_WARN, "Duplicated group name '%s', skipping\n", name);
-					} else {
-						count++;
-						g_hash_table_insert(audiobridge->groups, g_strdup(name), GUINT_TO_POINTER(count));
-						g_hash_table_insert(audiobridge->groups_byid, GUINT_TO_POINTER(count), g_strdup(name));
-					}
-					gl = gl->next;
-				}
-				if(count == 0) {
-					JANUS_LOG(LOG_WARN, "Empty or invalid groups array provided, groups will be disabled in '%s'...\n", cat->name);
-					g_hash_table_destroy(audiobridge->groups);
-					g_hash_table_destroy(audiobridge->groups_byid);
-					audiobridge->groups = NULL;
-					audiobridge->groups_byid = NULL;
-				}
-			}
 			g_atomic_int_set(&audiobridge->destroyed, 0);
 			janus_mutex_init(&audiobridge->mutex);
 			audiobridge->rtp_forwarders = g_hash_table_new_full(NULL, NULL, NULL, (GDestroyNotify)janus_audiobridge_rtp_forwarder_destroy);
@@ -1545,11 +1477,6 @@ json_t *janus_audiobridge_query_session(janus_plugin_session *handle) {
 			json_object_set_new(info, "room", string_ids ? json_string(room->room_id_str) : json_integer(room->room_id));
 		janus_mutex_unlock(&rooms_mutex);
 		json_object_set_new(info, "id", string_ids ? json_string(participant->user_id_str) : json_integer(participant->user_id));
-		if(room && participant->group > 0 && room->groups_byid != NULL) {
-			char *name = (char *)g_hash_table_lookup(room->groups_byid, GUINT_TO_POINTER(participant->group));
-			if(name != NULL)
-				json_object_set_new(info, "group", json_string(name));
-		}
 		if(participant->display)
 			json_object_set_new(info, "display", json_string(participant->display));
 		if(participant->admin)
@@ -1770,7 +1697,6 @@ static json_t *janus_audiobridge_process_synchronous_request(janus_audiobridge_s
 		json_t *default_prebuffering = json_object_get(root, "default_prebuffering");
 		json_t *default_expectedloss = json_object_get(root, "default_expectedloss");
 		json_t *default_bitrate = json_object_get(root, "default_bitrate");
-		json_t *groups = json_object_get(root, "groups");
 		json_t *mjrs = json_object_get(root, "mjrs");
 		json_t *mjrsdir = json_object_get(root, "mjrs_dir");
 		json_t *permanent = json_object_get(root, "permanent");
@@ -1791,32 +1717,6 @@ static json_t *janus_audiobridge_process_synchronous_request(janus_audiobridge_s
 				JANUS_LOG(LOG_ERR, "Invalid element in the allowed array (not a string)\n");
 				error_code = JANUS_AUDIOBRIDGE_ERROR_INVALID_ELEMENT;
 				g_snprintf(error_cause, 512, "Invalid element in the allowed array (not a string)");
-				goto prepare_response;
-			}
-		}
-		if(groups) {
-			/* Make sure the "groups" array only contains strings */
-			gboolean ok = TRUE;
-			if(json_array_size(groups) > 0) {
-				if(json_array_size(groups) > JANUS_AUDIOBRIDGE_MAX_GROUPS) {
-					JANUS_LOG(LOG_ERR, "Too many groups specified (max %d allowed)\n", JANUS_AUDIOBRIDGE_MAX_GROUPS);
-					error_code = JANUS_AUDIOBRIDGE_ERROR_INVALID_ELEMENT;
-					g_snprintf(error_cause, 512, "Too many groups specified (max %d allowed)", JANUS_AUDIOBRIDGE_MAX_GROUPS);
-					goto prepare_response;
-				}
-				size_t i = 0;
-				for(i=0; i<json_array_size(groups); i++) {
-					json_t *a = json_array_get(groups, i);
-					if(!a || !json_is_string(a)) {
-						ok = FALSE;
-						break;
-					}
-				}
-			}
-			if(!ok) {
-				JANUS_LOG(LOG_ERR, "Invalid element in the groups array (not a string)\n");
-				error_code = JANUS_AUDIOBRIDGE_ERROR_INVALID_ELEMENT;
-				g_snprintf(error_cause, 512, "Invalid element in the groups array (not a string)");
 				goto prepare_response;
 			}
 		}
@@ -1983,30 +1883,6 @@ static json_t *janus_audiobridge_process_synchronous_request(janus_audiobridge_s
 		}
 		g_atomic_int_set(&audiobridge->destroyed, 0);
 		janus_mutex_init(&audiobridge->mutex);
-		if(groups != NULL && json_array_size(groups) > 0) {
-			/* Populate the group hashtable, and create the related indexes */
-			audiobridge->groups = g_hash_table_new_full(g_str_hash, g_str_equal, (GDestroyNotify)g_free, NULL);
-			audiobridge->groups_byid = g_hash_table_new_full(NULL, NULL, NULL, (GDestroyNotify)g_free);
-			size_t i = 0;
-			int count = 0;
-			for(i=0; i<json_array_size(groups); i++) {
-				const char *name = json_string_value(json_array_get(groups, i));
-				if(g_hash_table_lookup(audiobridge->groups, name)) {
-					JANUS_LOG(LOG_WARN, "Duplicated group name '%s', skipping\n", name);
-				} else {
-					count++;
-					g_hash_table_insert(audiobridge->groups, g_strdup(name), GUINT_TO_POINTER(count));
-					g_hash_table_insert(audiobridge->groups_byid, GUINT_TO_POINTER(count), g_strdup(name));
-				}
-			}
-			if(count == 0) {
-				JANUS_LOG(LOG_WARN, "Empty or invalid groups array provided, groups will be disabled\n");
-				g_hash_table_destroy(audiobridge->groups);
-				g_hash_table_destroy(audiobridge->groups_byid);
-				audiobridge->groups = NULL;
-				audiobridge->groups_byid = NULL;
-			}
-		}
 		audiobridge->rtp_forwarders = g_hash_table_new_full(NULL, NULL, NULL, (GDestroyNotify)janus_audiobridge_rtp_forwarder_destroy);
 		audiobridge->rtp_encoder = NULL;
 		audiobridge->rtp_udp_sock = -1;
@@ -2074,17 +1950,6 @@ static json_t *janus_audiobridge_process_synchronous_request(janus_audiobridge_s
 			if(audiobridge->default_prebuffering != DEFAULT_PREBUFFERING) {
 				g_snprintf(value, BUFSIZ, "%d", audiobridge->default_prebuffering);
 				janus_config_add(config, c, janus_config_item_create("default_prebuffering", value));
-			}
-			if(audiobridge->groups) {
-				/* Save array of groups */
-				janus_config_array *gl = janus_config_array_create("groups");
-				janus_config_add(config, c, gl);
-				GHashTableIter iter;
-				gpointer key;
-				g_hash_table_iter_init(&iter, audiobridge->groups);
-				while(g_hash_table_iter_next(&iter, &key, NULL)) {
-					janus_config_add(config, gl, janus_config_item_create(NULL, (char *)key));
-				}
 			}
 			if(audiobridge->mjrs)
 				janus_config_add(config, c, janus_config_item_create("mjrs", "yes"));
@@ -2244,17 +2109,6 @@ static json_t *janus_audiobridge_process_synchronous_request(janus_audiobridge_s
 			if(audiobridge->default_prebuffering != DEFAULT_PREBUFFERING) {
 				g_snprintf(value, BUFSIZ, "%d", audiobridge->default_prebuffering);
 				janus_config_add(config, c, janus_config_item_create("default_prebuffering", value));
-			}
-			if(audiobridge->groups) {
-				/* Save array of groups */
-				janus_config_array *gl = janus_config_array_create("groups");
-				janus_config_add(config, c, gl);
-				GHashTableIter iter;
-				gpointer key;
-				g_hash_table_iter_init(&iter, audiobridge->groups);
-				while(g_hash_table_iter_next(&iter, &key, NULL)) {
-					janus_config_add(config, gl, janus_config_item_create(NULL, (char *)key));
-				}
 			}
 			if(audiobridge->mjrs)
 				janus_config_add(config, c, janus_config_item_create("mjrs", "yes"));
@@ -3344,22 +3198,6 @@ static json_t *janus_audiobridge_process_synchronous_request(janus_audiobridge_s
 			g_snprintf(error_cause, 512, "No such room (%s)", room_id_str);
 			goto prepare_response;
 		}
-		/* If this room uses groups, check if a valid group name was provided */
-		uint group = 0;
-		const char *group_name = NULL;
-		if(audiobridge->groups != NULL) {
-			group_name = json_string_value(json_object_get(root, "group"));
-			if(group_name != NULL) {
-				group = GPOINTER_TO_UINT(g_hash_table_lookup(audiobridge->groups, group_name));
-				if(group == 0) {
-					janus_mutex_unlock(&audiobridge->mutex);
-					janus_mutex_unlock(&rooms_mutex);
-					error_code = JANUS_AUDIOBRIDGE_ERROR_NO_SUCH_GROUP;
-					g_snprintf(error_cause, 512, "No such group");
-					goto prepare_response;
-				}
-			}
-		}
 
 		if(janus_audiobridge_create_udp_socket_if_needed(audiobridge)) {
 			janus_mutex_unlock(&audiobridge->mutex);
@@ -3377,7 +3215,7 @@ static json_t *janus_audiobridge_process_synchronous_request(janus_audiobridge_s
 			goto prepare_response;
 		}
 
-		guint32 stream_id = janus_audiobridge_rtp_forwarder_add_helper(audiobridge, group,
+		guint32 stream_id = janus_audiobridge_rtp_forwarder_add_helper(audiobridge,
 			host, port, ssrc_value, ptype, codec, srtp_suite, srtp_crypto, always_on, 0);
 		janus_mutex_unlock(&audiobridge->mutex);
 		janus_mutex_unlock(&rooms_mutex);
@@ -3386,8 +3224,6 @@ static json_t *janus_audiobridge_process_synchronous_request(janus_audiobridge_s
 		response = json_object();
 		json_object_set_new(response, "audiobridge", json_string("success"));
 		json_object_set_new(response, "room", string_ids ? json_string(room_id_str) : json_integer(room_id));
-		if(group_name != NULL)
-			json_object_set_new(response, "group", json_string(group_name));
 		json_object_set_new(response, "stream_id", json_integer(stream_id));
 		json_object_set_new(response, "host", json_string(host));
 		json_object_set_new(response, "port", json_integer(port));
@@ -3528,11 +3364,6 @@ static json_t *janus_audiobridge_process_synchronous_request(janus_audiobridge_s
 			janus_audiobridge_rtp_forwarder *rf = (janus_audiobridge_rtp_forwarder *)value;
 			json_t *fl = json_object();
 			json_object_set_new(fl, "stream_id", json_integer(stream_id));
-			if(rf->group > 0 && audiobridge->groups_byid != NULL) {
-				char *name = (char *)g_hash_table_lookup(audiobridge->groups_byid, GUINT_TO_POINTER(rf->group));
-				if(name != NULL)
-					json_object_set_new(fl, "group", json_string(name));
-			}
 			char address[100];
 			if(rf->serv_addr.sin_family == AF_INET) {
 				json_object_set_new(fl, "ip", json_string(
@@ -4446,28 +4277,6 @@ static void *janus_audiobridge_handler(void *data) {
 				}
 				admin = TRUE;
 			}
-			/* If this room uses groups, make sure a valid group name was provided */
-			uint group = 0;
-			if(audiobridge->groups != NULL) {
-				JANUS_VALIDATE_JSON_OBJECT(root, group_parameters,
-					error_code, error_cause, TRUE,
-					JANUS_AUDIOBRIDGE_ERROR_MISSING_ELEMENT, JANUS_AUDIOBRIDGE_ERROR_INVALID_ELEMENT);
-				if(error_code != 0) {
-					janus_mutex_unlock(&audiobridge->mutex);
-					janus_refcount_decrease(&audiobridge->ref);
-					goto error;
-				}
-				const char *group_name = json_string_value(json_object_get(root, "group"));
-				group = GPOINTER_TO_UINT(g_hash_table_lookup(audiobridge->groups, group_name));
-				if(group == 0) {
-					janus_mutex_unlock(&audiobridge->mutex);
-					janus_refcount_decrease(&audiobridge->ref);
-					JANUS_LOG(LOG_ERR, "No such group (%s)\n", group_name);
-					error_code = JANUS_AUDIOBRIDGE_ERROR_NO_SUCH_GROUP;
-					g_snprintf(error_cause, 512, "No such group (%s)", group_name);
-					goto error;
-				}
-			}
 			json_t *display = json_object_get(root, "display");
 			const char *display_text = display ? json_string_value(display) : NULL;
 			json_t *prebuffer = json_object_get(root, "prebuffer");
@@ -4604,7 +4413,6 @@ static void *janus_audiobridge_handler(void *data) {
 			participant->room = audiobridge;
 			participant->user_id = user_id;
 			participant->user_id_str = user_id_str ? g_strdup(user_id_str) : NULL;
-			participant->group = group;
 			g_free(participant->display);
 			participant->admin = admin;
 			participant->display = display_text ? g_strdup(display_text) : NULL;
@@ -4857,7 +4665,6 @@ static void *janus_audiobridge_handler(void *data) {
 			json_t *record = json_object_get(root, "record");
 			json_t *recfile = json_object_get(root, "filename");
 			json_t *display = json_object_get(root, "display");
-			json_t *group = json_object_get(root, "group");
 			json_t *gen_offer = json_object_get(root, "generate_offer");
 			json_t *update = json_object_get(root, "update");
 			if(prebuffer) {
@@ -4921,17 +4728,6 @@ static void *janus_audiobridge_handler(void *data) {
 				participant->expected_loss = expected_loss;
 				if(participant->encoder)
 					opus_encoder_ctl(participant->encoder, OPUS_SET_PACKET_LOSS_PERC(participant->expected_loss));
-			}
-			if(group && participant->room && participant->room->groups != NULL) {
-				const char *group_name = json_string_value(group);
-				uint group_id = GPOINTER_TO_UINT(g_hash_table_lookup(participant->room->groups, group_name));
-				if(group_id == 0) {
-					JANUS_LOG(LOG_ERR, "No such group (%s)\n", group_name);
-					error_code = JANUS_AUDIOBRIDGE_ERROR_NO_SUCH_GROUP;
-					g_snprintf(error_cause, 512, "No such group (%s)", group_name);
-					goto error;
-				}
-				participant->group = group_id;
 			}
 			if(display || (participant->stereo && spatial)) {
 				if(display) {
@@ -5205,28 +5001,6 @@ static void *janus_audiobridge_handler(void *data) {
 				}
 				admin = TRUE;
 			}
-			/* If this room uses groups, make sure a valid group name was provided */
-			uint group = 0;
-			if(audiobridge->groups != NULL) {
-				JANUS_VALIDATE_JSON_OBJECT(root, group_parameters,
-					error_code, error_cause, TRUE,
-					JANUS_AUDIOBRIDGE_ERROR_MISSING_ELEMENT, JANUS_AUDIOBRIDGE_ERROR_INVALID_ELEMENT);
-				if(error_code != 0) {
-					janus_mutex_unlock(&audiobridge->mutex);
-					janus_refcount_decrease(&audiobridge->ref);
-					goto error;
-				}
-				const char *group_name = json_string_value(json_object_get(root, "group"));
-				group = GPOINTER_TO_UINT(g_hash_table_lookup(audiobridge->groups, group_name));
-				if(group == 0) {
-					janus_mutex_unlock(&audiobridge->mutex);
-					janus_refcount_decrease(&audiobridge->ref);
-					JANUS_LOG(LOG_ERR, "No such group (%s)\n", group_name);
-					error_code = JANUS_AUDIOBRIDGE_ERROR_NO_SUCH_GROUP;
-					g_snprintf(error_cause, 512, "No such group (%s)", group_name);
-					goto error;
-				}
-			}
 			json_t *display = json_object_get(root, "display");
 			const char *display_text = display ? json_string_value(display) : NULL;
 			json_t *gain = json_object_get(root, "volume");
@@ -5462,7 +5236,6 @@ static void *janus_audiobridge_handler(void *data) {
 			participant->user_id = user_id;
 			g_free(participant->user_id_str);
 			participant->user_id_str = user_id_str ? g_strdup(user_id_str) : NULL;
-			participant->group = group;
 			participant->admin = admin;
 			g_free(participant->display);
 			participant->display = display_text ? g_strdup(display_text) : NULL;
@@ -5942,54 +5715,13 @@ static void *janus_audiobridge_mixer_thread(void *data) {
 	memset(outBuffer, 0, OPUS_SAMPLES*(audiobridge->spatial_audio ? 4 : 2));
 	memset(resampled, 0, OPUS_SAMPLES*(audiobridge->spatial_audio ? 4 : 2));
 
-	/* In case forwarding groups are enabled, we need additional buffers */
-	uint groups_num = audiobridge->groups ? g_hash_table_size(audiobridge->groups) : 0, index = 0;
-	opus_int32 *groupBuffers = NULL;
-	uint32_t groupBufferSize = 0, groupBuffersSize = 0;
-	OpusEncoder **groupEncoders = NULL;
-	if(groups_num > 0) {
-		/* Create buffers */
-		groupBufferSize = (audiobridge->spatial_audio ? OPUS_SAMPLES*2 : OPUS_SAMPLES) * sizeof(opus_int32);
-		groupBuffersSize = groups_num * groupBufferSize;
-		groupBuffers = (opus_int32 *)g_malloc(groupBuffersSize);
-		groupEncoders = (OpusEncoder **)g_malloc(groups_num * sizeof(OpusEncoder *));
-		/* Create separate encoders */
-		for(index=0; index<groups_num; index++) {
-			int error = 0;
-			OpusEncoder *rtp_encoder = opus_encoder_create(audiobridge->sampling_rate,
-				audiobridge->spatial_audio ? 2 : 1, OPUS_APPLICATION_VOIP, &error);
-			if(audiobridge->sampling_rate == 8000) {
-				opus_encoder_ctl(rtp_encoder, OPUS_SET_MAX_BANDWIDTH(OPUS_BANDWIDTH_NARROWBAND));
-			} else if(audiobridge->sampling_rate == 12000) {
-				opus_encoder_ctl(rtp_encoder, OPUS_SET_MAX_BANDWIDTH(OPUS_BANDWIDTH_MEDIUMBAND));
-			} else if(audiobridge->sampling_rate == 16000) {
-				opus_encoder_ctl(rtp_encoder, OPUS_SET_MAX_BANDWIDTH(OPUS_BANDWIDTH_WIDEBAND));
-			} else if(audiobridge->sampling_rate == 24000) {
-				opus_encoder_ctl(rtp_encoder, OPUS_SET_MAX_BANDWIDTH(OPUS_BANDWIDTH_SUPERWIDEBAND));
-			} else if(audiobridge->sampling_rate == 48000) {
-				opus_encoder_ctl(rtp_encoder, OPUS_SET_MAX_BANDWIDTH(OPUS_BANDWIDTH_FULLBAND));
-			} else {
-				JANUS_LOG(LOG_WARN, "Unsupported sampling rate %d, setting 16kHz\n", audiobridge->sampling_rate);
-				opus_encoder_ctl(rtp_encoder, OPUS_SET_MAX_BANDWIDTH(OPUS_BANDWIDTH_WIDEBAND));
-			}
-			/* Check if we need FEC */
-			if(audiobridge->default_expectedloss > 0) {
-				opus_encoder_ctl(rtp_encoder, OPUS_SET_INBAND_FEC(TRUE));
-				opus_encoder_ctl(rtp_encoder, OPUS_SET_PACKET_LOSS_PERC(audiobridge->default_expectedloss));
-			}
-			groupEncoders[index] = rtp_encoder;
-		}
-	}
-
 	/* Base RTP packets, in case there are forwarders involved */
-	gboolean have_opus[JANUS_AUDIOBRIDGE_MAX_GROUPS+1],
-		have_alaw[JANUS_AUDIOBRIDGE_MAX_GROUPS+1],
-		have_ulaw[JANUS_AUDIOBRIDGE_MAX_GROUPS+1];
-	unsigned char *rtpbuffer = (unsigned char *)g_malloc0(1500 * (groups_num+1));
+	gboolean have_opus, have_alaw, have_ulaw;
+	unsigned char *rtpbuffer = (unsigned char *)g_malloc0(1500);
 	janus_rtp_header *rtph = NULL;
 	/* In case we need G.711 forwarders */
-	uint8_t *rtpalaw = (uint8_t *)g_malloc0((12+G711_SAMPLES) * (groups_num+1)),
-			*rtpulaw = (uint8_t *)g_malloc0((12+G711_SAMPLES) * (groups_num+1));
+	uint8_t *rtpalaw = (uint8_t *)g_malloc0((12+G711_SAMPLES)),
+			*rtpulaw = (uint8_t *)g_malloc0((12+G711_SAMPLES));
 
 	/* Timer */
 	struct timeval now, before;
@@ -6060,8 +5792,6 @@ static void *janus_audiobridge_mixer_thread(void *data) {
 		janus_mutex_unlock_nodebug(&audiobridge->mutex);
 		for(i=0; i<samples; i++)
 			buffer[i] = 0;
-		if(groups_num > 0)
-			memset(groupBuffers, 0, groupBuffersSize);
 		ps = participants_list;
 		while(ps) {
 			janus_audiobridge_participant *p = (janus_audiobridge_participant *)ps->data;
@@ -6086,95 +5816,46 @@ static void *janus_audiobridge_mixer_thread(void *data) {
 					memcpy(pkt->data, resampled, pkt->length*2);
 				}
 				curBuffer = (opus_int16 *)pkt->data;
-				if(groups_num == 0) {
-					/* Add to the main mix */
-					if(!p->stereo) {
-						for(i=0; i<samples; i++) {
-							if(p->volume_gain == 100) {
-								buffer[i] += curBuffer[i];
-							} else {
-								buffer[i] += (curBuffer[i]*p->volume_gain)/100;
-							}
-						}
-					} else {
-						diff = 50 - p->spatial_position;
-						lgain = 50 + diff;
-						rgain = 50 - diff;
-						for(i=0; i<samples; i++) {
-							if(i%2 == 0) {
-								if(lgain == 100) {
-									if(p->volume_gain == 100) {
-										buffer[i] += curBuffer[i];
-									} else {
-										buffer[i] += (curBuffer[i]*p->volume_gain)/100;
-									}
-								} else {
-									if(p->volume_gain == 100) {
-										buffer[i] += (curBuffer[i]*lgain)/100;
-									} else {
-										buffer[i] += (((curBuffer[i]*lgain)/100)*p->volume_gain)/100;
-									}
-								}
-							} else {
-								if(rgain == 100) {
-									if(p->volume_gain == 100) {
-										buffer[i] += curBuffer[i];
-									} else {
-										buffer[i] += (curBuffer[i]*p->volume_gain)/100;
-									}
-								} else {
-									if(p->volume_gain == 100) {
-										buffer[i] += (curBuffer[i]*rgain)/100;
-									} else {
-										buffer[i] += (((curBuffer[i]*rgain)/100)*p->volume_gain)/100;
-									}
-								}
-							}
+				/* Add to the main mix */
+				if(!p->stereo) {
+					for(i=0; i<samples; i++) {
+						if(p->volume_gain == 100) {
+							buffer[i] += curBuffer[i];
+						} else {
+							buffer[i] += (curBuffer[i]*p->volume_gain)/100;
 						}
 					}
 				} else {
-					/* Add to the group submix */
-					int index = p->group-1;
-					if(!p->stereo) {
-						for(i=0; i<samples; i++) {
-							if(p->volume_gain == 100) {
-								*(groupBuffers + index*samples + i) += curBuffer[i];
-							} else {
-								*(groupBuffers + index*samples + i) += (curBuffer[i]*p->volume_gain)/100;
-							}
-						}
-					} else {
-						diff = 50 - p->spatial_position;
-						lgain = 50 + diff;
-						rgain = 50 - diff;
-						for(i=0; i<samples; i++) {
-							if(i%2 == 0) {
-								if(lgain == 100) {
-									if(p->volume_gain == 100) {
-										*(groupBuffers + index*samples + i) += curBuffer[i];
-									} else {
-										*(groupBuffers + index*samples + i) += (curBuffer[i]*p->volume_gain)/100;
-									}
+					diff = 50 - p->spatial_position;
+					lgain = 50 + diff;
+					rgain = 50 - diff;
+					for(i=0; i<samples; i++) {
+						if(i%2 == 0) {
+							if(lgain == 100) {
+								if(p->volume_gain == 100) {
+									buffer[i] += curBuffer[i];
 								} else {
-									if(p->volume_gain == 100) {
-										*(groupBuffers + index*samples + i) += (curBuffer[i]*lgain)/100;
-									} else {
-										*(groupBuffers + index*samples + i) += (((curBuffer[i]*lgain)/100)*p->volume_gain)/100;
-									}
+									buffer[i] += (curBuffer[i]*p->volume_gain)/100;
 								}
 							} else {
-								if(rgain == 100) {
-									if(p->volume_gain == 100) {
-										*(groupBuffers + index*samples + i) += curBuffer[i];
-									} else {
-										*(groupBuffers + index*samples + i) += (curBuffer[i]*p->volume_gain)/100;
-									}
+								if(p->volume_gain == 100) {
+									buffer[i] += (curBuffer[i]*lgain)/100;
 								} else {
-									if(p->volume_gain == 100) {
-										*(groupBuffers + index*samples + i) += (curBuffer[i]*rgain)/100;
-									} else {
-										*(groupBuffers + index*samples + i) += (((curBuffer[i]*rgain)/100)*p->volume_gain)/100;
-									}
+									buffer[i] += (((curBuffer[i]*lgain)/100)*p->volume_gain)/100;
+								}
+							}
+						} else {
+							if(rgain == 100) {
+								if(p->volume_gain == 100) {
+									buffer[i] += curBuffer[i];
+								} else {
+									buffer[i] += (curBuffer[i]*p->volume_gain)/100;
+								}
+							} else {
+								if(p->volume_gain == 100) {
+									buffer[i] += (curBuffer[i]*rgain)/100;
+								} else {
+									buffer[i] += (((curBuffer[i]*rgain)/100)*p->volume_gain)/100;
 								}
 							}
 						}
@@ -6183,14 +5864,6 @@ static void *janus_audiobridge_mixer_thread(void *data) {
 			}
 			janus_mutex_unlock(&p->qmutex);
 			ps = ps->next;
-		}
-		/* If groups are in use, put them together in the main mix */
-		if(groups_num > 0) {
-			/* Mix all submixes */
-			for(index=0; index<groups_num; index++) {
-				for(i=0; i<samples; i++)
-					buffer[i] += *(groupBuffers + index*samples + i);
-			}
 		}
 		/* Send proper packet to each participant (remove own contribution) */
 		ps = participants_list;
@@ -6296,19 +5969,11 @@ static void *janus_audiobridge_mixer_thread(void *data) {
 			}
 			if(go_on) {
 				/* By default, let's send the mixed frame to everybody */
-				if(groups_num == 0) {
-					for(i=0; i<samples; i++)
-						outBuffer[i] = buffer[i];
-					have_opus[0] = FALSE;
-					have_alaw[0] = FALSE;
-					have_ulaw[0] = FALSE;
-				} else {
-					for(index=0; index <= groups_num; index++) {
-						have_opus[index] = FALSE;
-						have_alaw[index] = FALSE;
-						have_ulaw[index] = FALSE;
-					}
-				}
+				for(i=0; i<samples; i++)
+					outBuffer[i] = buffer[i];
+				have_opus = FALSE;
+				have_alaw = FALSE;
+				have_ulaw = FALSE;
 				GHashTableIter iter;
 				gpointer key, value;
 				g_hash_table_iter_init(&iter, audiobridge->rtp_forwarders);
@@ -6318,39 +5983,28 @@ static void *janus_audiobridge_mixer_thread(void *data) {
 					janus_audiobridge_rtp_forwarder *forwarder = (janus_audiobridge_rtp_forwarder *)value;
 					if(count == 0 && !forwarder->always_on)
 						continue;
-					/* Check if we're forwarding the main mix or a specific group */
-					if(groups_num > 0) {
-						if(forwarder->group == 0) {
-							/* We're forwarding the main mix */
-							for(i=0; i<samples; i++)
-								outBuffer[i] = buffer[i];
-						} else {
-							/* We're forwarding a group mix */
-							index = forwarder->group-1;
-							for(i=0; i<samples; i++)
-								outBuffer[i] = *(groupBuffers + index*samples + i);
-						}
-					}
+					for(i=0; i<samples; i++)
+						outBuffer[i] = buffer[i];
 					if(forwarder->codec == JANUS_AUDIOCODEC_OPUS) {
 						/* This is an Opus forwarder, check if we have a version for that already */
-						if(!have_opus[forwarder->group]) {
+						if(!have_opus) {
 							/* We don't, encode now */
-							OpusEncoder *rtp_encoder = (forwarder->group == 0 ? audiobridge->rtp_encoder : groupEncoders[forwarder->group-1]);
+							OpusEncoder *rtp_encoder = audiobridge->rtp_encoder;
 							length = opus_encode(rtp_encoder, outBuffer,
 								audiobridge->spatial_audio ? samples/2 : samples,
-								rtpbuffer + forwarder->group*1500 + 12, 1500-12);
+								rtpbuffer + 12, 1500-12);
 							if(length < 0) {
 								JANUS_LOG(LOG_ERR, "[Opus] Ops! got an error encoding the Opus frame: %d (%s)\n", length, opus_strerror(length));
 								continue;
 							}
-							have_opus[forwarder->group] = TRUE;
+							have_opus = TRUE;
 						}
-						rtph = (janus_rtp_header *)(rtpbuffer + forwarder->group*1500);
+						rtph = (janus_rtp_header *)(rtpbuffer);
 						rtph->version = 2;
 					} else if(forwarder->codec == JANUS_AUDIOCODEC_PCMA || forwarder->codec == JANUS_AUDIOCODEC_PCMU) {
 						/* This is a G.711 forwarder, check if we have a version for that already */
-						if((forwarder->codec == JANUS_AUDIOCODEC_PCMA && !have_alaw[forwarder->group]) ||
-								(forwarder->codec == JANUS_AUDIOCODEC_PCMU && !have_ulaw[forwarder->group])) {
+						if((forwarder->codec == JANUS_AUDIOCODEC_PCMA && !have_alaw) ||
+								(forwarder->codec == JANUS_AUDIOCODEC_PCMU && !have_ulaw)) {
 							/* We don't, encode now */
 							if(audiobridge->sampling_rate != 8000) {
 								/* Downsample this from whatever the mixer uses */
@@ -6365,19 +6019,18 @@ static void *janus_audiobridge_mixer_thread(void *data) {
 							}
 							int i = 0;
 							if(forwarder->codec == JANUS_AUDIOCODEC_PCMA) {
-								uint8_t *rtpalaw_buffer = rtpalaw + forwarder->group*G711_SAMPLES + 12;
+								uint8_t *rtpalaw_buffer = rtpalaw + 12;
 								for(i=0; i<160; i++)
 									rtpalaw_buffer[i] = janus_audiobridge_g711_alaw_encode(resampled[i]);
-								have_alaw[forwarder->group] = TRUE;
+								have_alaw = TRUE;
 							} else {
-								uint8_t *rtpulaw_buffer = rtpulaw + forwarder->group*G711_SAMPLES + 12;
+								uint8_t *rtpulaw_buffer = rtpulaw + 12;
 								for(i=0; i<160; i++)
 									rtpulaw_buffer[i] = janus_audiobridge_g711_ulaw_encode(resampled[i]);
-								have_ulaw[forwarder->group] = TRUE;
+								have_ulaw = TRUE;
 							}
 						}
-						rtph = (janus_rtp_header *)(forwarder->codec == JANUS_AUDIOCODEC_PCMA ?
-							(rtpalaw + forwarder->group*G711_SAMPLES) : (rtpulaw + forwarder->group*G711_SAMPLES));
+						rtph = (janus_rtp_header *)(forwarder->codec == JANUS_AUDIOCODEC_PCMA ? rtpalaw : rtpulaw);
 						rtph->version = 2;
 						length = 160;
 					}
@@ -6422,14 +6075,6 @@ static void *janus_audiobridge_mixer_thread(void *data) {
 	g_free(rtpbuffer);
 	g_free(rtpalaw);
 	g_free(rtpulaw);
-	g_free(groupBuffers);
-	if(groupEncoders) {
-		for(index=0; index<groups_num; index++) {
-			if(groupEncoders[index])
-				opus_encoder_destroy(groupEncoders[index]);
-		}
-		g_free(groupEncoders);
-	}
 	JANUS_LOG(LOG_VERB, "Leaving mixer thread for room %s (%s)...\n", audiobridge->room_id_str, audiobridge->room_name);
 
 	janus_refcount_decrease(&audiobridge->ref);
