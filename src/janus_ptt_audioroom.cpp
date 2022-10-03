@@ -4,6 +4,8 @@
  * \copyright GNU General Public License v3
  */
 
+#include <memory>
+
 #include <glib.h>
 
 extern "C" {
@@ -395,7 +397,7 @@ static void janus_audiobridge_participant_free(const janus_refcount *participant
 		g_async_queue_unref(participant->outbuf);
 	}
 	g_free(participant->mjr_base);
-	g_free(participant);
+	delete participant;
 }
 
 static void janus_audiobridge_session_destroy(janus_audiobridge_session *session) {
@@ -4061,7 +4063,7 @@ static void *janus_audiobridge_handler(void *data) {
 			}
 			JANUS_LOG(LOG_VERB, "  -- Participant ID: %s\n", user_id_str);
 			if(participant == NULL) {
-				participant = (janus_audiobridge_participant *)g_malloc0(sizeof(janus_audiobridge_participant));
+				participant = new janus_audiobridge_participant {};
 				janus_refcount_init(&participant->ref, janus_audiobridge_participant_free);
 				g_atomic_int_set(&participant->active, 0);
 				participant->codec = codec;
@@ -4126,7 +4128,7 @@ static void *janus_audiobridge_handler(void *data) {
 					janus_mutex_unlock(&audiobridge->mutex);
 					janus_refcount_decrease(&audiobridge->ref);
 					g_free(participant->display);
-					g_free(participant);
+					delete participant;
 					JANUS_LOG(LOG_ERR, "Error creating Opus encoder\n");
 					error_code = JANUS_AUDIOBRIDGE_ERROR_LIBOPUS_ERROR;
 					g_snprintf(error_cause, 512, "Error creating Opus encoder");
@@ -4172,7 +4174,7 @@ static void *janus_audiobridge_handler(void *data) {
 					if(participant->decoder)
 						opus_decoder_destroy(participant->decoder);
 					participant->decoder = NULL;
-					g_free(participant);
+					delete participant;
 					JANUS_LOG(LOG_ERR, "Error creating Opus decoder\n");
 					error_code = JANUS_AUDIOBRIDGE_ERROR_LIBOPUS_ERROR;
 					g_snprintf(error_cause, 512, "Error creating Opus decoder");
