@@ -12,9 +12,9 @@
 #include <stdlib.h>
 
 extern "C" {
-#include "mutex.h"
-#include "refcount.h"
-#include "rtp.h"
+#include "janus/mutex.h"
+#include "janus/refcount.h"
+#include "janus/rtp.h"
 }
 
 namespace ptt_audioroom

@@ -22,16 +22,16 @@ extern "C" {
 #include <poll.h>
 
 extern "C" {
-#include "../debug.h"
-#include "../apierror.h"
-#include "../config.h"
-#include "../mutex.h"
-#include "../rtp.h"
-#include "../rtpsrtp.h"
-#include "../rtcp.h"
-#include "../sdp-utils.h"
-#include "../utils.h"
-#include "../ip-utils.h"
+#include "janus/debug.h"
+#include "janus/apierror.h"
+#include "janus/config.h"
+#include "janus/mutex.h"
+#include "janus/rtp.h"
+#include "janus/rtpsrtp.h"
+#include "janus/rtcp.h"
+#include "janus/sdp-utils.h"
+#include "janus/utils.h"
+#include "janus/ip-utils.h"
 }
 
 #include "record.h"

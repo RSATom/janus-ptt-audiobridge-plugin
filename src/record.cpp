@@ -15,8 +15,8 @@
 #include "record.h"
 
 extern "C" {
-#include "debug.h"
-#include "utils.h"
+#include "janus/debug.h"
+#include "janus/utils.h"
 }
 
 #define htonll(x) ((1==htonl(1)) ? (x) : ((gint64)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
