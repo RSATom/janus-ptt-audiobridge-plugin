@@ -26,8 +26,11 @@
 #include <jansson.h>
 
 #include "record.h"
+
+extern "C" {
 #include "debug.h"
 #include "utils.h"
+}
 
 #define htonll(x) ((1==htonl(1)) ? (x) : ((gint64)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
 #define ntohll(x) ((1==ntohl(1)) ? (x) : ((gint64)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32))
@@ -108,7 +111,7 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 		return NULL;
 	}
 	/* Create the recorder */
-	janus_recorder *rc = g_malloc0(sizeof(janus_recorder));
+	janus_recorder *rc = (janus_recorder *)g_malloc0(sizeof(janus_recorder));
 	janus_refcount_init(&rc->ref, janus_recorder_free);
 	janus_rtp_switching_context_reset(&rc->context);
 	rc->dir = NULL;
@@ -185,10 +188,10 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 		/* Choose a random username */
 		if(!rec_tempname) {
 			/* Use .mjr as an extension right away */
-			g_snprintf(newname, 1024, "janus-recording-%"SCNu32".mjr", janus_random_uint32());
+			g_snprintf(newname, 1024, "janus-recording-%" SCNu32 ".mjr", janus_random_uint32());
 		} else {
 			/* Append the temporary extension to .mjr, we'll rename when closing */
-			g_snprintf(newname, 1024, "janus-recording-%"SCNu32".mjr.%s", janus_random_uint32(), rec_tempext);
+			g_snprintf(newname, 1024, "janus-recording-%" SCNu32 ".mjr.%s", janus_random_uint32(), rec_tempext);
 		}
 	} else {
 		/* Just append the extension */

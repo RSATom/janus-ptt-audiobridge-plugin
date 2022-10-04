@@ -17,17 +17,18 @@
  * \ref core
  */
 
-#ifndef JANUS_RECORD_H
-#define JANUS_RECORD_H
+#pragma once
 
 #include <inttypes.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+extern "C" {
 #include "mutex.h"
 #include "refcount.h"
 #include "rtp.h"
+}
 
 
 /*! \brief Media types we can record */
@@ -64,15 +65,15 @@ typedef struct janus_recorder {
 	/*! \brief Whether the info header for this recorder instance has already been written or not */
 	volatile int header;
 	/*! \brief Whether this recorder instance can be used for writing or not */
-	volatile int writable;
+	int writable;
 	/*! \brief Whether writing s/RTP packets/data is paused */
-	volatile int paused;
+	int paused;
 	/*! \brief RTP switching context for rewriting RTP headers */
 	janus_rtp_switching_context context;
 	/*! \brief Mutex to lock/unlock this recorder instance */
 	janus_mutex mutex;
 	/*! \brief Atomic flag to check if this instance has been destroyed */
-	volatile gint destroyed;
+	gint destroyed;
 	/*! \brief Reference counter for this instance */
 	janus_refcount ref;
 } janus_recorder;
@@ -152,5 +153,3 @@ int janus_recorder_close(janus_recorder *recorder);
 /*! \brief Destroy the recorder instance
  * @param[in] recorder The janus_recorder instance to destroy */
 void janus_recorder_destroy(janus_recorder *recorder);
-
-#endif
