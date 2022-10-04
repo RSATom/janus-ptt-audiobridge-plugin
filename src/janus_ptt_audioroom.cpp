@@ -29,12 +29,12 @@ extern "C" {
 #include "../rtp.h"
 #include "../rtpsrtp.h"
 #include "../rtcp.h"
-#include "../record.h"
 #include "../sdp-utils.h"
 #include "../utils.h"
 #include "../ip-utils.h"
 }
 
+#include "record.h"
 
 /* Plugin information */
 #define JANUS_AUDIOBRIDGE_VERSION			12
