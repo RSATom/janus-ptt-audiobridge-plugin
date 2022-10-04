@@ -202,7 +202,7 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 			g_free(copy_for_base);
 			return NULL;
 		}
-		rc->file = fopen(newname, "wb");
+		rc->file = fopen(newname, "ab");
 	} else {
 		char path[1024];
 		memset(path, 0, 1024);
@@ -215,7 +215,7 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 			g_free(copy_for_base);
 			return NULL;
 		}
-		rc->file = fopen(path, "wb");
+		rc->file = fopen(path, "ab");
 	}
 	if(rc->file == NULL) {
 		JANUS_LOG(LOG_ERR, "fopen error: %d\n", errno);
@@ -470,6 +470,7 @@ int janus_recorder_save_frame(janus_recorder *recorder, char *buffer, uint lengt
 		header->seq_number = htons(seq);
 		header->timestamp = htonl(timestamp);
 	}
+	fflush(recorder->file);
 	/* Done */
 	janus_mutex_unlock_nodebug(&recorder->mutex);
 	return 0;
@@ -482,7 +483,6 @@ int janus_recorder_close(janus_recorder *recorder) {
 	if(recorder->file) {
 		fseek(recorder->file, 0L, SEEK_END);
 		size_t fsize = ftell(recorder->file);
-		fseek(recorder->file, 0L, SEEK_SET);
 		JANUS_LOG(LOG_INFO, "File is %zu bytes: %s\n", fsize, recorder->filename);
 	}
 	if(rec_tempname) {
