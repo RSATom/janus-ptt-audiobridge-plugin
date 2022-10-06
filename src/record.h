@@ -17,6 +17,8 @@ extern "C" {
 #include "rtp.h"
 }
 
+namespace ptt_audioroom
+{
 
 /*! \brief Media types we can record */
 typedef enum janus_recorder_medium {
@@ -140,3 +142,5 @@ int janus_recorder_close(janus_recorder *recorder);
 /*! \brief Destroy the recorder instance
  * @param[in] recorder The janus_recorder instance to destroy */
 void janus_recorder_destroy(janus_recorder *recorder);
+
+}

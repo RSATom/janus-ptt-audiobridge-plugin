@@ -35,6 +35,7 @@ extern "C" {
 }
 
 #include "record.h"
+using namespace ptt_audioroom;
 
 /* Plugin information */
 #define JANUS_AUDIOBRIDGE_VERSION			12

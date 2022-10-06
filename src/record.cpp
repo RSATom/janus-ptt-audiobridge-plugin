@@ -22,6 +22,8 @@ extern "C" {
 #define htonll(x) ((1==htonl(1)) ? (x) : ((gint64)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
 #define ntohll(x) ((1==ntohl(1)) ? (x) : ((gint64)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32))
 
+namespace ptt_audioroom
+{
 
 /* Info header in the structured recording */
 static const char *header = "MJR00002";
@@ -515,4 +517,6 @@ void janus_recorder_destroy(janus_recorder *recorder) {
 	if(!recorder || !g_atomic_int_compare_and_exchange(&recorder->destroyed, 0, 1))
 		return;
 	janus_refcount_decrease(&recorder->ref);
+}
+
 }
