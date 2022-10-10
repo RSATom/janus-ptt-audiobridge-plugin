@@ -15,6 +15,7 @@ namespace ptt_audioroom
 {
 
 struct janus_audiobridge_room {
+	janus_refcount ref;			/* Reference counter for this room */
 	gchar *room_id_str;			/* Unique room ID (when using strings) */
 	gchar *room_name;			/* Room description */
 	gchar *room_secret;			/* Secret needed to manipulate (e.g., destroy) this room */
@@ -46,7 +47,6 @@ struct janus_audiobridge_room {
 	OpusEncoder *rtp_encoder;	/* Opus encoder instance to use for all RTP forwarders */
 	janus_mutex rtp_mutex;		/* Mutex to lock the RTP forwarders list */
 	int rtp_udp_sock;			/* UDP socket to use to forward RTP packets */
-	janus_refcount ref;			/* Reference counter for this room */
 };
 
 void janus_audiobridge_room_destroy(janus_audiobridge_room *audiobridge);

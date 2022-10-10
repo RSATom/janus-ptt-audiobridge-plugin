@@ -61,7 +61,8 @@ void janus_audiobridge_participant_unref(janus_audiobridge_participant *particip
 }
 
 void janus_audiobridge_participant_free(const janus_refcount *participant_ref) {
-	janus_audiobridge_participant *participant = janus_refcount_containerof(participant_ref, janus_audiobridge_participant, ref);
+	static_assert(std::is_standard_layout<janus_audiobridge_participant>::value);
+	janus_audiobridge_participant *participant = (janus_audiobridge_participant*)participant_ref;
 	/* This participant can be destroyed, free all the resources */
 	g_free(participant->user_id_str);
 	g_free(participant->display);

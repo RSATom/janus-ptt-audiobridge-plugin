@@ -20,6 +20,7 @@ struct janus_audiobridge_session;
 struct janus_audiobridge_room;
 
 struct janus_audiobridge_participant {
+	janus_refcount ref;			/* Reference counter for this participant */
 	janus_audiobridge_session *session;
 	janus_audiobridge_room *room;	/* Room */
 	gchar *user_id_str;		/* Unique ID in the room (when using strings) */
@@ -65,7 +66,6 @@ struct janus_audiobridge_participant {
 	janus_recorder *arc;		/* The Janus recorder instance for this user's audio, if enabled */
 	janus_mutex rec_mutex;		/* Mutex to protect the recorder from race conditions */
 	gint destroyed;	/* Whether this room has been destroyed */
-	janus_refcount ref;			/* Reference counter for this participant */
 };
 
 void janus_audiobridge_recorder_create(janus_audiobridge_participant *participant);
