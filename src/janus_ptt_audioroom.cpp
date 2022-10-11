@@ -178,7 +178,6 @@ static struct janus_json_parameter join_parameters[] = {
 	{"spatial_position", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"audio_level_average", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"audio_active_packets", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
-	{"generate_offer", JANUS_JSON_BOOL, 0},
 	{"secret", JSON_STRING, 0}
 };
 static struct janus_json_parameter mjrs_parameters[] = {
@@ -193,7 +192,6 @@ static struct janus_json_parameter configure_parameters[] = {
 	{"volume", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"spatial_position", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"display", JSON_STRING, 0},
-	{"generate_offer", JANUS_JSON_BOOL, 0},
 	{"update", JANUS_JSON_BOOL, 0}
 };
 static struct janus_json_parameter rtp_forward_parameters[] = {
@@ -1001,8 +999,6 @@ json_t *janus_audiobridge_query_session(janus_plugin_session *handle) {
 		if(participant->opus_bitrate)
 			json_object_set_new(info, "opus-bitrate", json_integer(participant->opus_bitrate));
 	}
-	if(session->plugin_offer)
-		json_object_set_new(info, "plugin-offer", json_true());
 	json_object_set_new(info, "started", g_atomic_int_get(&session->started) ? json_true() : json_false());
 	json_object_set_new(info, "hangingup", g_atomic_int_get(&session->hangingup) ? json_true() : json_false());
 	json_object_set_new(info, "destroyed", g_atomic_int_get(&session->destroyed) ? json_true() : json_false());
@@ -3226,7 +3222,6 @@ static void janus_audiobridge_hangup_media_internal(janus_plugin_session *handle
 		}
 	}
 	janus_mutex_unlock(&rooms_mutex);
-	session->plugin_offer = FALSE;
 	g_atomic_int_set(&session->hangingup, 0);
 }
 
@@ -3281,8 +3276,8 @@ static void *janus_audiobridge_handler(void *data) {
 		gboolean sdp_update; sdp_update = FALSE;
 		if(json_object_get(msg->jsep, "update") != NULL)
 			sdp_update = json_is_true(json_object_get(msg->jsep, "update"));
-		gboolean got_offer, got_answer, generate_offer;
-		got_offer = FALSE; got_answer = FALSE; generate_offer = FALSE;
+		gboolean got_offer, got_answer;
+		got_offer = FALSE; got_answer = FALSE;
 		const char *msg_sdp_type; msg_sdp_type = json_string_value(json_object_get(msg->jsep, "type"));
 		const char *msg_sdp; msg_sdp = json_string_value(json_object_get(msg->jsep, "sdp"));
 		if(msg_sdp_type != NULL) {
@@ -3379,7 +3374,6 @@ static void *janus_audiobridge_handler(void *data) {
 			json_t *acodec = json_object_get(root, "codec");
 			json_t *user_audio_level_average = json_object_get(root, "audio_level_average");
 			json_t *user_audio_active_packets = json_object_get(root, "audio_active_packets");
-			json_t *gen_offer = json_object_get(root, "generate_offer");
 			uint prebuffer_count = prebuffer ? json_integer_value(prebuffer) : audiobridge->default_prebuffering;
 			if(prebuffer_count > MAX_PREBUFFERING) {
 				prebuffer_count = audiobridge->default_prebuffering;
@@ -3658,11 +3652,6 @@ static void *janus_audiobridge_handler(void *data) {
 			}
 			if(user_id_allocated)
 				g_free(user_id_str);
-			/* If we need to generate an offer ourselves, do that */
-			if(gen_offer != NULL)
-				generate_offer = json_is_true(gen_offer);
-			if(generate_offer)
-				session->plugin_offer = generate_offer;
 		} else if(!strcasecmp(request_text, "configure")) {
 			/* Handle this participant */
 			janus_audiobridge_participant *participant = (janus_audiobridge_participant *)session->participant;
@@ -3685,7 +3674,6 @@ static void *janus_audiobridge_handler(void *data) {
 			json_t *gain = json_object_get(root, "volume");
 			json_t *spatial = json_object_get(root, "spatial_position");
 			json_t *display = json_object_get(root, "display");
-			json_t *gen_offer = json_object_get(root, "generate_offer");
 			json_t *update = json_object_get(root, "update");
 			if(prebuffer) {
 				uint prebuffer_count = json_integer_value(prebuffer);
@@ -3802,7 +3790,7 @@ static void *janus_audiobridge_handler(void *data) {
 				janus_mutex_unlock(&rooms_mutex);
 			}
 			gboolean do_update = update ? json_is_true(update) : FALSE;
-			if(do_update && (!sdp_update || !session->plugin_offer)) {
+			if(do_update && !sdp_update) {
 				JANUS_LOG(LOG_WARN, "Got a 'update' request, but no SDP update? Ignoring...\n");
 			}
 			/* Done */
@@ -3824,17 +3812,6 @@ static void *janus_audiobridge_handler(void *data) {
 				if(participant->stereo)
 					json_object_set_new(info, "spatial_position", json_integer(participant->spatial_position));
 				gateway->notify_event(&janus_audiobridge_plugin, session->handle, info);
-			}
-			/* If we need to generate an offer ourselves, do that */
-			if(do_update && session->plugin_offer) {
-				/* We need an update and we originated an offer before, let's do it again */
-				generate_offer = TRUE;
-			} else if(gen_offer != NULL) {
-				generate_offer = json_is_true(gen_offer);
-			}
-			if(generate_offer) {
-				/* We should check if this conflicts with a user-generated offer from before */
-				session->plugin_offer = generate_offer;
 			}
 		} else if(!strcasecmp(request_text, "self-unmute") || !strcasecmp(request_text, "self-mute")) {
 			janus_audiobridge_participant *participant = (janus_audiobridge_participant *)session->participant;
@@ -4387,7 +4364,7 @@ static void *janus_audiobridge_handler(void *data) {
 		/* Prepare JSON event */
 		JANUS_LOG(LOG_VERB, "Preparing JSON event as a reply\n");
 		/* Any SDP to handle? */
-		if(!msg_sdp && !generate_offer) {
+		if(!msg_sdp) {
 			int ret = gateway->push_event(msg->handle, &janus_audiobridge_plugin, msg->transaction, event, NULL);
 			JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
 			json_decref(event);
@@ -4407,20 +4384,14 @@ static void *janus_audiobridge_handler(void *data) {
 				goto error;
 			}
 			/* We answer by default, unless the user asked the plugin for an offer */
-			if(msg_sdp && got_offer && session->plugin_offer) {
-				json_decref(event);
-				JANUS_LOG(LOG_ERR, "Received an offer on a plugin-offered session\n");
-				error_code = JANUS_AUDIOBRIDGE_ERROR_INVALID_SDP;
-				g_snprintf(error_cause, 512, "Received an offer on a plugin-offered session");
-				goto error;
-			} else if(msg_sdp && got_answer && !session->plugin_offer) {
+			if(msg_sdp && got_answer) {
 				json_decref(event);
 				JANUS_LOG(LOG_ERR, "Received an answer when we didn't send an offer\n");
 				error_code = JANUS_AUDIOBRIDGE_ERROR_INVALID_SDP;
 				g_snprintf(error_cause, 512, "Received an answer when we didn't send an offer");
 				goto error;
 			}
-			const char *type = session->plugin_offer ? "offer" : "answer";
+			const char *type = "answer";
 			char error_str[512];
 			janus_sdp *sdp = NULL;
 			if(msg_sdp != NULL) {
@@ -4457,7 +4428,7 @@ static void *janus_audiobridge_handler(void *data) {
 				JANUS_LOG(LOG_VERB, "Opus payload type is %d, FEC %s\n", participant->opus_pt, participant->fec ? "enabled" : "disabled");
 			}
 			/* Check if the audio level extension was offered */
-			int extmap_id = generate_offer ? 2 : -1;
+			int extmap_id = -1;
 			if(sdp != NULL) {
 				GList *temp = sdp->m_lines;
 				while(temp) {
@@ -4536,26 +4507,6 @@ static void *janus_audiobridge_handler(void *data) {
 				/* Let's overwrite a couple o= fields, in case this is a renegotiation */
 				answer->o_sessid = session->sdp_sessid;
 				answer->o_version = session->sdp_version;
-			} else if(generate_offer) {
-				/* We need to generate an offer ourselves */
-				int pt = 100;
-				offer = janus_sdp_generate_offer(
-					s_name, "1.1.1.1",
-					JANUS_SDP_OA_MLINE, JANUS_SDP_AUDIO,
-						JANUS_SDP_OA_CODEC, janus_audiocodec_name(JANUS_AUDIOCODEC_OPUS),
-						JANUS_SDP_OA_PT, pt,
-						JANUS_SDP_OA_FMTP, fmtp,
-						JANUS_SDP_OA_DIRECTION, JANUS_SDP_SENDRECV,
-						JANUS_SDP_OA_EXTENSION, JANUS_RTP_EXTMAP_MID, 1,
-						JANUS_SDP_OA_EXTENSION, JANUS_RTP_EXTMAP_AUDIO_LEVEL, extmap_id,
-					JANUS_SDP_OA_DONE);
-				/* Let's overwrite a couple o= fields, in case this is a renegotiation */
-				if(session->sdp_version == 1) {
-					session->sdp_sessid = offer->o_sessid;
-				} else {
-					offer->o_sessid = session->sdp_sessid;
-					offer->o_version = session->sdp_version;
-				}
 			}
 			/* Was the audio level extension negotiated? */
 			participant->extmap_id = 0;

@@ -17,7 +17,6 @@ struct janus_audiobridge_session {
 	janus_plugin_session *handle;
 	gint64 sdp_sessid;
 	gint64 sdp_version;
-	gboolean plugin_offer;
 	janus_audiobridge_participant* participant;
 	volatile gint started;
 	gint hangingup;
