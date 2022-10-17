@@ -10,7 +10,7 @@ extern "C" {
 #include "janus/rtp.h"
 }
 
-#include "record.h"
+#include "audio_recorder.h"
 
 
 namespace ptt_audioroom
@@ -63,7 +63,7 @@ struct janus_audiobridge_participant {
 	uint32_t last_timestamp;	/* Last in seq timestamp */
 	gboolean reset;				/* Whether or not the Opus context must be reset, without re-joining the room */
 	GThread *thread;			/* Encoding thread for this participant */
-	janus_recorder *arc;		/* The Janus recorder instance for this user's audio, if enabled */
+	audio_recorder *arc;		/* The Janus recorder instance for this user's audio, if enabled */
 	janus_mutex rec_mutex;		/* Mutex to protect the recorder from race conditions */
 	gint destroyed;	/* Whether this room has been destroyed */
 };

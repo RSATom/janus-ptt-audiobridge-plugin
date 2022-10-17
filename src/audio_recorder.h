@@ -21,7 +21,7 @@ namespace ptt_audioroom
 {
 
 /*! \brief Structure that represents a recorder */
-typedef struct janus_recorder {
+typedef struct audio_recorder {
 	/*! \brief Absolute path to the directory where the recorder file is stored */
 	char *dir;
 	/*! \brief Filename of this recorder file */
@@ -54,7 +54,7 @@ typedef struct janus_recorder {
 	gint destroyed;
 	/*! \brief Reference counter for this instance */
 	janus_refcount ref;
-} janus_recorder;
+} audio_recorder;
 
 /*! \brief Create a new recorder
  * \note If no target directory is provided, the current directory will be used. If no filename
@@ -62,67 +62,67 @@ typedef struct janus_recorder {
  * @param[in] dir Path of the directory to save the recording into (will try to create it if it doesn't exist)
  * @param[in] codec Codec the packets to record are encoded in ("opus")
  * @param[in] filename Filename to use for the recording
- * @returns A valid janus_recorder instance in case of success, NULL otherwise */
-janus_recorder *janus_recorder_create(const char *dir, const char *codec, const char *filename);
+ * @returns A valid audio_recorder instance in case of success, NULL otherwise */
+audio_recorder *audio_recorder_create(const char *dir, const char *codec, const char *filename);
 /*! \brief Create a new recorder with additional info
- * \note This is to allow adding more arguments to janus_recorder_create, but
- * still keep janus_recorder_create in place for backwards compatibility.
+ * \note This is to allow adding more arguments to audio_recorder_create, but
+ * still keep audio_recorder_create in place for backwards compatibility.
  * @param[in] dir Path of the directory to save the recording into (will try to create it if it doesn't exist)
  * @param[in] codec Codec the packets to record are encoded in ("opus")
  * @param[in] fmtp Codec-specific details
  * @param[in] filename Filename to use for the recording
- * @returns A valid janus_recorder instance in case of success, NULL otherwise */
-janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, const char *fmtp, const char *filename);
+ * @returns A valid audio_recorder instance in case of success, NULL otherwise */
+audio_recorder *audio_recorder_create_full(const char *dir, const char *codec, const char *fmtp, const char *filename);
 /*! \brief Pause recording packets
  * \note This is to allow pause and resume recorder functionality.
- * @param[in] recorder The janus_recorder to pause
+ * @param[in] recorder The audio_recorder to pause
  * @returns 0 in case of success, a negative integer otherwise */
-int janus_recorder_pause(janus_recorder *recorder);
+int audio_recorder_pause(audio_recorder *recorder);
 /*! \brief Resume recording packets
  * \note This is to allow pause and resume recorder functionality.
- * @param[in] recorder The janus_recorder to resume
+ * @param[in] recorder The audio_recorder to resume
  * @returns 0 in case of success, a negative integer otherwise */
-int janus_recorder_resume(janus_recorder *recorder);
+int audio_recorder_resume(audio_recorder *recorder);
 /*! \brief Add an RTP extension to this recording
  * \note This will only be possible BEFORE the first frame is written, as it needs to
  * be reflected in the .mjr header: doing this after that will return an error.
- * @param[in] recorder The janus_recorder instance to add the extension to
+ * @param[in] recorder The audio_recorder instance to add the extension to
  * @param[in] id Numeric ID of the RTP extension
  * @param[in] extmap Namespace of the RTP extension
  * @returns 0 in case of success, a negative integer otherwise */
-int janus_recorder_add_extmap(janus_recorder *recorder, int id, const char *extmap);
+int audio_recorder_add_extmap(audio_recorder *recorder, int id, const char *extmap);
 /*! \brief Set the description for this recording
- * @param[in] recorder The janus_recorder instance to add the description to
+ * @param[in] recorder The audio_recorder instance to add the description to
  * @param[in] description The description
  * @returns 0 in case of success, a negative integer otherwise */
-int janus_recorder_description(janus_recorder *recorder, const char *description);
+int audio_recorder_description(audio_recorder *recorder, const char *description);
 /*! \brief Mark this recording as using RED for audio
  * \note This will only be possible BEFORE the first frame is written, as it needs to
  * be reflected in the .mjr header: doing this after that will return an error.
- * @param[in] recorder The janus_recorder instance to configure
+ * @param[in] recorder The audio_recorder instance to configure
  * @param[in] red_pt Payload type of RED
  * @returns 0 in case of success, a negative integer otherwise */
-int janus_recorder_opusred(janus_recorder *recorder, int red_pt);
+int audio_recorder_opusred(audio_recorder *recorder, int red_pt);
 /*! \brief Mark this recorder as end-to-end encrypted (e.g., via Insertable Streams)
  * \note This will only be possible BEFORE the first frame is written, as it needs to
  * be reflected in the .mjr header: doing this after that will return an error. Also
  * notice that an encrypted recording will NOT be processable with \c janus-pp-rec
  * out of the box, since the post-processor will not have access to unencrypted media
- * @param[in] recorder The janus_recorder instance to mark as encrypted
+ * @param[in] recorder The audio_recorder instance to mark as encrypted
  * @returns 0 in case of success, a negative integer otherwise */
-int janus_recorder_encrypted(janus_recorder *recorder);
+int audio_recorder_encrypted(audio_recorder *recorder);
 /*! \brief Save an RTP frame in the recorder
- * @param[in] recorder The janus_recorder instance to save the frame to
+ * @param[in] recorder The audio_recorder instance to save the frame to
  * @param[in] buffer The frame data to save
  * @param[in] length The frame data length
  * @returns 0 in case of success, a negative integer otherwise */
-int janus_recorder_save_frame(janus_recorder *recorder, char *buffer, uint length);
+int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint length);
 /*! \brief Close the recorder
- * @param[in] recorder The janus_recorder instance to close
+ * @param[in] recorder The audio_recorder instance to close
  * @returns 0 in case of success, a negative integer otherwise */
-int janus_recorder_close(janus_recorder *recorder);
+int audio_recorder_close(audio_recorder *recorder);
 /*! \brief Destroy the recorder instance
- * @param[in] recorder The janus_recorder instance to destroy */
-void janus_recorder_destroy(janus_recorder *recorder);
+ * @param[in] recorder The audio_recorder instance to destroy */
+void audio_recorder_destroy(audio_recorder *recorder);
 
 }

@@ -12,7 +12,7 @@
 #include <glib.h>
 #include <jansson.h>
 
-#include "record.h"
+#include "audio_recorder.h"
 
 extern "C" {
 #include "janus/debug.h"
@@ -27,10 +27,10 @@ static const char *header = "MJR00002";
 /* Frame header in the structured recording */
 static const char *frame_header = "MEET";
 
-static void janus_recorder_free(const janus_refcount *recorder_ref) {
-	janus_recorder *recorder = janus_refcount_containerof(recorder_ref, janus_recorder, ref);
+static void audio_recorder_free(const janus_refcount *recorder_ref) {
+	audio_recorder *recorder = janus_refcount_containerof(recorder_ref, audio_recorder, ref);
 	/* This recorder can be destroyed, free all the resources */
-	janus_recorder_close(recorder);
+	audio_recorder_close(recorder);
 	g_free(recorder->dir);
 	recorder->dir = NULL;
 	g_free(recorder->filename);
@@ -47,11 +47,11 @@ static void janus_recorder_free(const janus_refcount *recorder_ref) {
 	g_free(recorder);
 }
 
-janus_recorder *janus_recorder_create(const char *dir, const char *codec, const char *filename) {
-	/* Same as janus_recorder_create_full, but with no fmtp */
-	return janus_recorder_create_full(dir, codec, NULL, filename);
+audio_recorder *audio_recorder_create(const char *dir, const char *codec, const char *filename) {
+	/* Same as audio_recorder_create_full, but with no fmtp */
+	return audio_recorder_create_full(dir, codec, NULL, filename);
 }
-janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, const char *fmtp, const char *filename) {
+audio_recorder *audio_recorder_create_full(const char *dir, const char *codec, const char *fmtp, const char *filename) {
 	if(codec == NULL) {
 		JANUS_LOG(LOG_ERR, "Missing codec information\n");
 		return NULL;
@@ -62,8 +62,8 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 		return NULL;
 	}
 	/* Create the recorder */
-	janus_recorder *rc = (janus_recorder *)g_malloc0(sizeof(janus_recorder));
-	janus_refcount_init(&rc->ref, janus_recorder_free);
+	audio_recorder *rc = (audio_recorder *)g_malloc0(sizeof(audio_recorder));
+	janus_refcount_init(&rc->ref, audio_recorder_free);
 	janus_rtp_switching_context_reset(&rc->context);
 	rc->dir = NULL;
 	rc->filename = NULL;
@@ -107,14 +107,14 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 				/* Directory does not exist, try creating it */
 				if(janus_mkdir(rec_dir, 0755) < 0) {
 					JANUS_LOG(LOG_ERR, "mkdir (%s) error: %d (%s)\n", rec_dir, errno, g_strerror(errno));
-					janus_recorder_destroy(rc);
+					audio_recorder_destroy(rc);
 					g_free(copy_for_parent);
 					g_free(copy_for_base);
 					return NULL;
 				}
 			} else {
 				JANUS_LOG(LOG_ERR, "stat (%s) error: %d (%s)\n", rec_dir, errno, g_strerror(errno));
-				janus_recorder_destroy(rc);
+				audio_recorder_destroy(rc);
 				g_free(copy_for_parent);
 				g_free(copy_for_base);
 				return NULL;
@@ -126,7 +126,7 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 			} else {
 				/* File exists but it's not a directory? */
 				JANUS_LOG(LOG_ERR, "Not a directory? %s\n", rec_dir);
-				janus_recorder_destroy(rc);
+				audio_recorder_destroy(rc);
 				g_free(copy_for_parent);
 				g_free(copy_for_base);
 				return NULL;
@@ -147,7 +147,7 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 		/* Make sure folder to save to is not protected */
 		if(janus_is_folder_protected(newname)) {
 			JANUS_LOG(LOG_ERR, "Target recording path '%s' is in protected folder...\n", newname);
-			janus_recorder_destroy(rc);
+			audio_recorder_destroy(rc);
 			g_free(copy_for_parent);
 			g_free(copy_for_base);
 			return NULL;
@@ -160,7 +160,7 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 		/* Make sure folder to save to is not protected */
 		if(janus_is_folder_protected(path)) {
 			JANUS_LOG(LOG_ERR, "Target recording path '%s' is in protected folder...\n", path);
-			janus_recorder_destroy(rc);
+			audio_recorder_destroy(rc);
 			g_free(copy_for_parent);
 			g_free(copy_for_base);
 			return NULL;
@@ -169,7 +169,7 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 	}
 	if(rc->file == NULL) {
 		JANUS_LOG(LOG_ERR, "fopen error: %d\n", errno);
-		janus_recorder_destroy(rc);
+		audio_recorder_destroy(rc);
 		g_free(copy_for_parent);
 		g_free(copy_for_base);
 		return NULL;
@@ -182,7 +182,7 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 	if(res != strlen(header)) {
 		JANUS_LOG(LOG_ERR, "Couldn't write .mjr header (%zu != %zu, %s)\n",
 			res, strlen(header), g_strerror(errno));
-		janus_recorder_destroy(rc);
+		audio_recorder_destroy(rc);
 		g_free(copy_for_parent);
 		g_free(copy_for_base);
 		return NULL;
@@ -197,7 +197,7 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 	return rc;
 }
 
-int janus_recorder_pause(janus_recorder *recorder) {
+int audio_recorder_pause(audio_recorder *recorder) {
 	if(!recorder)
 		return -1;
 	if(!recorder->paused) {
@@ -207,7 +207,7 @@ int janus_recorder_pause(janus_recorder *recorder) {
 	return -2;
 }
 
-int janus_recorder_resume(janus_recorder *recorder) {
+int audio_recorder_resume(audio_recorder *recorder) {
 	if(!recorder)
 		return -1;
 	if(recorder->paused) {
@@ -220,7 +220,7 @@ int janus_recorder_resume(janus_recorder *recorder) {
 	return -2;
 }
 
-int janus_recorder_add_extmap(janus_recorder *recorder, int id, const char *extmap) {
+int audio_recorder_add_extmap(audio_recorder *recorder, int id, const char *extmap) {
 	if(!recorder || recorder->header || id < 1 || id > 15 || extmap == NULL )
 		return -1;
 	if(recorder->extensions == NULL)
@@ -229,7 +229,7 @@ int janus_recorder_add_extmap(janus_recorder *recorder, int id, const char *extm
 	return 0;
 }
 
-int janus_recorder_description(janus_recorder *recorder, const char *description) {
+int audio_recorder_description(audio_recorder *recorder, const char *description) {
 	if(!recorder || !description)
 		return -1;
 	if(recorder->header) {
@@ -241,7 +241,7 @@ int janus_recorder_description(janus_recorder *recorder, const char *description
 	return 0;
 }
 
-int janus_recorder_opusred(janus_recorder *recorder, int red_pt) {
+int audio_recorder_opusred(audio_recorder *recorder, int red_pt) {
 	if(!recorder)
 		return -1;
 	if(!recorder->header) {
@@ -251,7 +251,7 @@ int janus_recorder_opusred(janus_recorder *recorder, int red_pt) {
 	return -1;
 }
 
-int janus_recorder_encrypted(janus_recorder *recorder) {
+int audio_recorder_encrypted(audio_recorder *recorder) {
 	if(!recorder)
 		return -1;
 	if(!recorder->header) {
@@ -261,7 +261,7 @@ int janus_recorder_encrypted(janus_recorder *recorder) {
 	return -1;
 }
 
-int janus_recorder_save_frame(janus_recorder *recorder, char *buffer, uint length) {
+int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint length) {
 	if(!recorder)
 		return -1;
 	if(!buffer || length < 1) {
@@ -388,7 +388,7 @@ int janus_recorder_save_frame(janus_recorder *recorder, char *buffer, uint lengt
 	return 0;
 }
 
-int janus_recorder_close(janus_recorder *recorder) {
+int audio_recorder_close(audio_recorder *recorder) {
 	if(!recorder || !recorder->writable)
 		return -1;
 	recorder ->writable = FALSE;
@@ -400,7 +400,7 @@ int janus_recorder_close(janus_recorder *recorder) {
 	return 0;
 }
 
-void janus_recorder_destroy(janus_recorder *recorder) {
+void audio_recorder_destroy(audio_recorder *recorder) {
 	if(!recorder || recorder->destroyed)
 		return;
 	recorder->destroyed = TRUE;

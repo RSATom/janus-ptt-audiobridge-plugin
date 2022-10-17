@@ -16,31 +16,31 @@ void janus_audiobridge_recorder_create(janus_audiobridge_participant *participan
 		return;
 	janus_audiobridge_room *audiobridge = participant->room;
 	char filename[255];
-	janus_recorder *rc = NULL;
+	audio_recorder *rc = NULL;
 	gint64 now = janus_get_real_time();
 	if(participant->arc == NULL) {
 		memset(filename, 0, 255);
 		/* Build a filename */
 		g_snprintf(filename, 255, "audiobridge-%s-user-%s-%" SCNi64 "-audio",
 			audiobridge->room_id_str, participant->user_id_str, now);
-		rc = janus_recorder_create(audiobridge->mjrs_dir,
+		rc = audio_recorder_create(audiobridge->mjrs_dir,
 			janus_audiocodec_name(JANUS_AUDIOCODEC_OPUS), filename);
 		if(rc == NULL) {
 			JANUS_LOG(LOG_ERR, "Couldn't open an audio recording file for this participant!\n");
 		}
 		if(participant->extmap_id > 0)
-			janus_recorder_add_extmap(rc, participant->extmap_id, JANUS_RTP_EXTMAP_AUDIO_LEVEL);
+			audio_recorder_add_extmap(rc, participant->extmap_id, JANUS_RTP_EXTMAP_AUDIO_LEVEL);
 		participant->arc = rc;
 	}
 }
 
 void janus_audiobridge_recorder_close(janus_audiobridge_participant *participant) {
 	if(participant->arc) {
-		janus_recorder *rc = participant->arc;
+		audio_recorder *rc = participant->arc;
 		participant->arc = NULL;
-		janus_recorder_close(rc);
+		audio_recorder_close(rc);
 		JANUS_LOG(LOG_INFO, "Closed user's audio recording %s\n", rc->filename ? rc->filename : "??");
-		janus_recorder_destroy(rc);
+		audio_recorder_destroy(rc);
 	}
 }
 

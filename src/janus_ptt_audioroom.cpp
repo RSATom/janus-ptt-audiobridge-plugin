@@ -2853,7 +2853,7 @@ void janus_audiobridge_incoming_rtp(janus_plugin_session *handle, janus_plugin_r
 	char *buf = packet->buffer;
 	uint16_t len = packet->length;
 	/* Save the frame if we're recording this leg */
-	janus_recorder_save_frame(participant->arc, buf, len);
+	audio_recorder_save_frame(participant->arc, buf, len);
 	if(g_atomic_int_get(&participant->active) && participant->decoder) {
 		/* First of all, check if a reset on the decoder is due */
 		/* Create a new decoder and get rid of the old one */
@@ -4517,7 +4517,7 @@ static void *janus_audiobridge_handler(void *data) {
 				/* If there's a recording, add the extension there */
 				janus_mutex_lock(&participant->rec_mutex);
 				if(participant->arc != NULL)
-					janus_recorder_add_extmap(participant->arc, participant->extmap_id, JANUS_RTP_EXTMAP_AUDIO_LEVEL);
+					audio_recorder_add_extmap(participant->arc, participant->extmap_id, JANUS_RTP_EXTMAP_AUDIO_LEVEL);
 				janus_mutex_unlock(&participant->rec_mutex);
 			}
 			/* Prepare the response */
