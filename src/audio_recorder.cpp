@@ -208,6 +208,60 @@ int audio_recorder_opusred(audio_recorder *recorder, int red_pt) {
 	return -1;
 }
 
+int audio_recorder_save_header(audio_recorder *recorder) {
+	/* Write info header as a JSON formatted info */
+	json_t *info = json_object();
+	/* FIXME Codecs should be configurable in the future */
+	const char *type = "a";
+	json_object_set_new(info, "t", json_string(type));								/* Audio/Video/Data */
+	json_object_set_new(info, "c", json_string(recorder->codec));					/* Media codec */
+	if(recorder->extensions) {
+		/* Add the extmaps to the JSON object */
+		json_t *extmaps = NULL;
+		GHashTableIter iter;
+		gpointer key, value;
+		g_hash_table_iter_init(&iter, recorder->extensions);
+		while(g_hash_table_iter_next(&iter, &key, &value)) {
+			int id = GPOINTER_TO_INT(key);
+			char *extmap = (char *)value;
+			if(id > 0 && id < 16 && extmap != NULL) {
+				if(extmaps == NULL)
+					extmaps = json_object();
+				char id_str[3];
+				g_snprintf(id_str, sizeof(id_str), "%d", id);
+				json_object_set_new(extmaps, id_str, json_string(extmap));
+			}
+		}
+		if(extmaps != NULL)
+			json_object_set_new(info, "x", extmaps);
+	}
+	json_object_set_new(info, "s", json_integer(recorder->created));				/* Created time */
+	json_object_set_new(info, "u", json_integer(janus_get_real_time()));			/* First frame written time */
+	/* If this is audio and using RED, take note of the payload type */
+	if(recorder->opusred_pt > 0)
+		json_object_set_new(info, "or", json_integer(recorder->opusred_pt));
+	gchar *info_text = json_dumps(info, JSON_PRESERVE_ORDER);
+	json_decref(info);
+	if(info_text == NULL) {
+		JANUS_LOG(LOG_ERR, "Error converting header to text...\n");
+		return -5;
+	}
+	uint16_t info_bytes = htons(strlen(info_text));
+	size_t res = fwrite(&info_bytes, sizeof(uint16_t), 1, recorder->file);
+	if(res != 1) {
+		JANUS_LOG(LOG_WARN, "Couldn't write size of JSON header in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
+			res, sizeof(uint16_t), g_strerror(errno));
+	}
+	res = fwrite(info_text, sizeof(char), strlen(info_text), recorder->file);
+	if(res != strlen(info_text)) {
+		JANUS_LOG(LOG_WARN, "Couldn't write JSON header in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
+			res, strlen(info_text), g_strerror(errno));
+	}
+	free(info_text);
+
+	return 0;
+}
+
 int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint length) {
 	if(!recorder)
 		return -1;
@@ -222,58 +276,12 @@ int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint lengt
 	}
 	gint64 now = janus_get_monotonic_time();
 	if(!recorder->header) {
-		/* Write info header as a JSON formatted info */
-		json_t *info = json_object();
-		/* FIXME Codecs should be configurable in the future */
-		const char *type = "a";
-		json_object_set_new(info, "t", json_string(type));								/* Audio/Video/Data */
-		json_object_set_new(info, "c", json_string(recorder->codec));					/* Media codec */
-		if(recorder->extensions) {
-			/* Add the extmaps to the JSON object */
-			json_t *extmaps = NULL;
-			GHashTableIter iter;
-			gpointer key, value;
-			g_hash_table_iter_init(&iter, recorder->extensions);
-			while(g_hash_table_iter_next(&iter, &key, &value)) {
-				int id = GPOINTER_TO_INT(key);
-				char *extmap = (char *)value;
-				if(id > 0 && id < 16 && extmap != NULL) {
-					if(extmaps == NULL)
-						extmaps = json_object();
-					char id_str[3];
-					g_snprintf(id_str, sizeof(id_str), "%d", id);
-					json_object_set_new(extmaps, id_str, json_string(extmap));
-				}
-			}
-			if(extmaps != NULL)
-				json_object_set_new(info, "x", extmaps);
-		}
-		json_object_set_new(info, "s", json_integer(recorder->created));				/* Created time */
-		json_object_set_new(info, "u", json_integer(janus_get_real_time()));			/* First frame written time */
-		/* If this is audio and using RED, take note of the payload type */
-		if(recorder->opusred_pt > 0)
-			json_object_set_new(info, "or", json_integer(recorder->opusred_pt));
-		gchar *info_text = json_dumps(info, JSON_PRESERVE_ORDER);
-		json_decref(info);
-		if(info_text == NULL) {
-			JANUS_LOG(LOG_ERR, "Error converting header to text...\n");
-			return -5;
-		}
-		uint16_t info_bytes = htons(strlen(info_text));
-		size_t res = fwrite(&info_bytes, sizeof(uint16_t), 1, recorder->file);
-		if(res != 1) {
-			JANUS_LOG(LOG_WARN, "Couldn't write size of JSON header in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
-				res, sizeof(uint16_t), g_strerror(errno));
-		}
-		res = fwrite(info_text, sizeof(char), strlen(info_text), recorder->file);
-		if(res != strlen(info_text)) {
-			JANUS_LOG(LOG_WARN, "Couldn't write JSON header in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
-				res, strlen(info_text), g_strerror(errno));
-		}
-		free(info_text);
-		/* Done */
-		recorder->started = now;
+		const int header_save_result = audio_recorder_save_header(recorder);
+		if(header_save_result != 0)
+			return header_save_result;
+
 		recorder->header = 1;
+		recorder->started = now;
 	}
 	/* Write frame header (fixed part[4], timestamp[4], length[2]) */
 	size_t res = fwrite(frame_header, sizeof(char), strlen(frame_header), recorder->file);
