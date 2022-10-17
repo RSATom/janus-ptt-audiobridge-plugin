@@ -208,16 +208,6 @@ int audio_recorder_opusred(audio_recorder *recorder, int red_pt) {
 	return -1;
 }
 
-int audio_recorder_encrypted(audio_recorder *recorder) {
-	if(!recorder)
-		return -1;
-	if(!recorder->header) {
-		recorder->encrypted = TRUE;
-		return 0;
-	}
-	return -1;
-}
-
 int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint length) {
 	if(!recorder)
 		return -1;
@@ -263,9 +253,6 @@ int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint lengt
 		/* If this is audio and using RED, take note of the payload type */
 		if(recorder->opusred_pt > 0)
 			json_object_set_new(info, "or", json_integer(recorder->opusred_pt));
-		/* If media will be end-to-end encrypted, mark it in the recording header */
-		if(recorder->encrypted)
-			json_object_set_new(info, "e", json_true());
 		gchar *info_text = json_dumps(info, JSON_PRESERVE_ORDER);
 		json_decref(info);
 		if(info_text == NULL) {

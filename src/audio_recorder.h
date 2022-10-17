@@ -36,8 +36,6 @@ typedef struct audio_recorder {
 	gint64 created, started;
 	/*! \brief In case RED is used for Opus, its payload types */
 	int opusred_pt;
-	/*! \brief Whether the recording contains end-to-end encrypted media or not */
-	gboolean encrypted;
 	/*! \brief Whether the info header for this recorder instance has already been written or not */
 	gboolean header;
 	/*! \brief Whether this recorder instance can be used for writing or not */
@@ -70,14 +68,6 @@ int audio_recorder_add_extmap(audio_recorder *recorder, int id, const char *extm
  * @param[in] red_pt Payload type of RED
  * @returns 0 in case of success, a negative integer otherwise */
 int audio_recorder_opusred(audio_recorder *recorder, int red_pt);
-/*! \brief Mark this recorder as end-to-end encrypted (e.g., via Insertable Streams)
- * \note This will only be possible BEFORE the first frame is written, as it needs to
- * be reflected in the .mjr header: doing this after that will return an error. Also
- * notice that an encrypted recording will NOT be processable with \c janus-pp-rec
- * out of the box, since the post-processor will not have access to unencrypted media
- * @param[in] recorder The audio_recorder instance to mark as encrypted
- * @returns 0 in case of success, a negative integer otherwise */
-int audio_recorder_encrypted(audio_recorder *recorder);
 /*! \brief Save an RTP frame in the recorder
  * @param[in] recorder The audio_recorder instance to save the frame to
  * @param[in] buffer The frame data to save
