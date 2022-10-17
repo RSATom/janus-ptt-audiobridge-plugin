@@ -46,6 +46,7 @@ typedef struct audio_recorder {
 	gint destroyed;
 	/*! \brief Reference counter for this instance */
 	janus_refcount ref;
+	bool write_failed;
 } audio_recorder;
 
 /*! \brief Create a new recorder

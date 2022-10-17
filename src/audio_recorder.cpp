@@ -26,6 +26,7 @@ namespace ptt_audioroom
 static const char *header = "MJR00002";
 /* Frame header in the structured recording */
 static const char *frame_header = "MEET";
+static const char *eos_header = "----";
 
 static void audio_recorder_free(const janus_refcount *recorder_ref) {
 	audio_recorder *recorder = janus_refcount_containerof(recorder_ref, audio_recorder, ref);
@@ -249,11 +250,13 @@ int audio_recorder_save_header(audio_recorder *recorder) {
 	uint16_t info_bytes = htons(strlen(info_text));
 	size_t res = fwrite(&info_bytes, sizeof(uint16_t), 1, recorder->file);
 	if(res != 1) {
+		recorder->write_failed = true;
 		JANUS_LOG(LOG_WARN, "Couldn't write size of JSON header in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
 			res, sizeof(uint16_t), g_strerror(errno));
 	}
 	res = fwrite(info_text, sizeof(char), strlen(info_text), recorder->file);
 	if(res != strlen(info_text)) {
+		recorder->write_failed = true;
 		JANUS_LOG(LOG_WARN, "Couldn't write JSON header in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
 			res, strlen(info_text), g_strerror(errno));
 	}
@@ -286,6 +289,7 @@ int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint lengt
 	/* Write frame header (fixed part[4], timestamp[4], length[2]) */
 	size_t res = fwrite(frame_header, sizeof(char), strlen(frame_header), recorder->file);
 	if(res != strlen(frame_header)) {
+		recorder->write_failed = true;
 		JANUS_LOG(LOG_WARN, "Couldn't write frame header in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
 			res, strlen(frame_header), g_strerror(errno));
 	}
@@ -293,12 +297,14 @@ int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint lengt
 	timestamp = htonl(timestamp);
 	res = fwrite(&timestamp, sizeof(uint32_t), 1, recorder->file);
 	if(res != 1) {
+		recorder->write_failed = true;
 		JANUS_LOG(LOG_WARN, "Couldn't write frame timestamp in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
 			res, sizeof(uint32_t), g_strerror(errno));
 	}
 	uint16_t header_bytes = htons(length);
 	res = fwrite(&header_bytes, sizeof(uint16_t), 1, recorder->file);
 	if(res != 1) {
+		recorder->write_failed = true;
 		JANUS_LOG(LOG_WARN, "Couldn't write size of frame in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
 			res, sizeof(uint16_t), g_strerror(errno));
 	}
@@ -315,6 +321,7 @@ int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint lengt
 	while(tot > 0) {
 		temp = fwrite(buffer+length-tot, sizeof(char), tot, recorder->file);
 		if(temp <= 0) {
+			recorder->write_failed = true;
 			JANUS_LOG(LOG_ERR, "Error saving frame...\n");
 			/* Restore packet header data */
 			header->ssrc = htonl(ssrc);
@@ -333,9 +340,46 @@ int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint lengt
 	return 0;
 }
 
+static int audio_recorder_save_eos(audio_recorder *recorder) {
+	if(!recorder)
+		return -1;
+	if(!recorder->file) {
+		return -3;
+	}
+	if(!recorder->writable) {
+		return -4;
+	}
+
+	gint64 now = janus_get_monotonic_time();
+	if(!recorder->header) {
+		const int header_save_result = audio_recorder_save_header(recorder);
+		if(header_save_result != 0)
+			return header_save_result;
+
+		recorder->header = TRUE;
+		recorder->started = now;
+	}
+
+	if(!recorder->write_failed) {
+		size_t res = fwrite(frame_header, sizeof(char), strlen(frame_header), recorder->file);
+		if(res != strlen(frame_header)) {
+			JANUS_LOG(LOG_WARN, "Couldn't write EOS header in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
+				res, strlen(frame_header), g_strerror(errno));
+		}
+
+		fflush(recorder->file);
+	}
+
+	/* Done */
+	return 0;
+}
+
 int audio_recorder_close(audio_recorder *recorder) {
 	if(!recorder || !recorder->writable)
 		return -1;
+
+	audio_recorder_save_eos(recorder);
+
 	recorder ->writable = FALSE;
 	if(recorder->file) {
 		fseek(recorder->file, 0L, SEEK_END);
