@@ -30,8 +30,6 @@ typedef struct audio_recorder {
 	FILE *file;
 	/*! \brief Codec the packets to record are encoded in ("opus") */
 	char *codec;
-	/*! \brief Codec-specific info */
-	char *fmtp;
 	/*! \brief Stream description */
 	char *description;
 	/*! \brief List of RTP extensions (as a hashtable, indexed by ID) in this recording */
@@ -62,15 +60,6 @@ typedef struct audio_recorder {
  * @param[in] filename Filename to use for the recording
  * @returns A valid audio_recorder instance in case of success, NULL otherwise */
 audio_recorder *audio_recorder_create(const char *dir, const char *codec, const char *filename);
-/*! \brief Create a new recorder with additional info
- * \note This is to allow adding more arguments to audio_recorder_create, but
- * still keep audio_recorder_create in place for backwards compatibility.
- * @param[in] dir Path of the directory to save the recording into (will try to create it if it doesn't exist)
- * @param[in] codec Codec the packets to record are encoded in ("opus")
- * @param[in] fmtp Codec-specific details
- * @param[in] filename Filename to use for the recording
- * @returns A valid audio_recorder instance in case of success, NULL otherwise */
-audio_recorder *audio_recorder_create_full(const char *dir, const char *codec, const char *fmtp, const char *filename);
 /*! \brief Pause recording packets
  * \note This is to allow pause and resume recorder functionality.
  * @param[in] recorder The audio_recorder to pause
