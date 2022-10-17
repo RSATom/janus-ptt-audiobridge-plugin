@@ -197,29 +197,6 @@ audio_recorder *audio_recorder_create_full(const char *dir, const char *codec, c
 	return rc;
 }
 
-int audio_recorder_pause(audio_recorder *recorder) {
-	if(!recorder)
-		return -1;
-	if(!recorder->paused) {
-		recorder->paused = TRUE;
-		return 0;
-	}
-	return -2;
-}
-
-int audio_recorder_resume(audio_recorder *recorder) {
-	if(!recorder)
-		return -1;
-	if(recorder->paused) {
-		recorder->paused = FALSE;
-		recorder->context.ts_reset = TRUE;
-		recorder->context.seq_reset = TRUE;
-		recorder->context.last_time = janus_get_monotonic_time();
-		return 0;
-	}
-	return -2;
-}
-
 int audio_recorder_add_extmap(audio_recorder *recorder, int id, const char *extmap) {
 	if(!recorder || recorder->header || id < 1 || id > 15 || extmap == NULL )
 		return -1;
@@ -272,9 +249,6 @@ int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint lengt
 	}
 	if(!recorder->writable) {
 		return -4;
-	}
-	if(g_atomic_int_get(&recorder->paused)) {
-		return -5;
 	}
 	gint64 now = janus_get_monotonic_time();
 	if(!recorder->header) {

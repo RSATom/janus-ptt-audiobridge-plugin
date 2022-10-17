@@ -46,8 +46,6 @@ typedef struct audio_recorder {
 	gboolean header;
 	/*! \brief Whether this recorder instance can be used for writing or not */
 	gboolean writable;
-	/*! \brief Whether writing s/RTP packets/data is paused */
-	gboolean paused;
 	/*! \brief RTP switching context for rewriting RTP headers */
 	janus_rtp_switching_context context;
 	/*! \brief Atomic flag to check if this instance has been destroyed */
@@ -76,19 +74,6 @@ audio_recorder *audio_recorder_create_full(const char *dir, const char *codec, c
 /*! \brief Pause recording packets
  * \note This is to allow pause and resume recorder functionality.
  * @param[in] recorder The audio_recorder to pause
- * @returns 0 in case of success, a negative integer otherwise */
-int audio_recorder_pause(audio_recorder *recorder);
-/*! \brief Resume recording packets
- * \note This is to allow pause and resume recorder functionality.
- * @param[in] recorder The audio_recorder to resume
- * @returns 0 in case of success, a negative integer otherwise */
-int audio_recorder_resume(audio_recorder *recorder);
-/*! \brief Add an RTP extension to this recording
- * \note This will only be possible BEFORE the first frame is written, as it needs to
- * be reflected in the .mjr header: doing this after that will return an error.
- * @param[in] recorder The audio_recorder instance to add the extension to
- * @param[in] id Numeric ID of the RTP extension
- * @param[in] extmap Namespace of the RTP extension
  * @returns 0 in case of success, a negative integer otherwise */
 int audio_recorder_add_extmap(audio_recorder *recorder, int id, const char *extmap);
 /*! \brief Set the description for this recording
