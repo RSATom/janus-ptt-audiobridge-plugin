@@ -67,13 +67,6 @@ typedef struct janus_recorder {
 	janus_refcount ref;
 } janus_recorder;
 
-/*! \brief Initialize the recorder code
- * @param[in] tempnames Whether the filenames should have a temporary extension, while saving, or not
- * @param[in] extension Extension to add in case tempnames is true */
-void janus_recorder_init(gboolean tempnames, const char *extension);
-/*! \brief De-initialize the recorder code */
-void janus_recorder_deinit(void);
-
 /*! \brief Create a new recorder
  * \note If no target directory is provided, the current directory will be used. If no filename
  * is passed, a random filename will be used.

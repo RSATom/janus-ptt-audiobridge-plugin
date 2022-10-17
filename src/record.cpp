@@ -30,30 +30,6 @@ static const char *header = "MJR00002";
 /* Frame header in the structured recording */
 static const char *frame_header = "MEET";
 
-/* Whether the filenames should have a temporary extension, while saving, or not (default=false) */
-static gboolean rec_tempname = FALSE;
-/* Extension to add in case tempnames is true (default="tmp" --> ".tmp") */
-static char *rec_tempext = NULL;
-
-void janus_recorder_init(gboolean tempnames, const char *extension) {
-	JANUS_LOG(LOG_INFO, "Initializing recorder code\n");
-	if(tempnames) {
-		rec_tempname = TRUE;
-		if(extension == NULL) {
-			rec_tempext = g_strdup("tmp");
-			JANUS_LOG(LOG_INFO, "  -- No extension provided, using default one (tmp)\n");
-		} else {
-			rec_tempext = g_strdup(extension);
-			JANUS_LOG(LOG_INFO, "  -- Using temporary extension .%s\n", rec_tempext);
-		}
-	}
-}
-
-void janus_recorder_deinit(void) {
-	rec_tempname = FALSE;
-	g_free(rec_tempext);
-}
-
 static void janus_recorder_free(const janus_refcount *recorder_ref) {
 	janus_recorder *recorder = janus_refcount_containerof(recorder_ref, janus_recorder, ref);
 	/* This recorder can be destroyed, free all the resources */
@@ -175,22 +151,10 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 	memset(newname, 0, 1024);
 	if(rec_file == NULL) {
 		/* Choose a random username */
-		if(!rec_tempname) {
-			/* Use .mjr as an extension right away */
-			g_snprintf(newname, 1024, "janus-recording-%" SCNu32 ".mjr", janus_random_uint32());
-		} else {
-			/* Append the temporary extension to .mjr, we'll rename when closing */
-			g_snprintf(newname, 1024, "janus-recording-%" SCNu32 ".mjr.%s", janus_random_uint32(), rec_tempext);
-		}
+		g_snprintf(newname, 1024, "janus-recording-%" SCNu32 ".mjr", janus_random_uint32());
 	} else {
 		/* Just append the extension */
-		if(!rec_tempname) {
-			/* Use .mjr as an extension right away */
-			g_snprintf(newname, 1024, "%s.mjr", rec_file);
-		} else {
-			/* Append the temporary extension to .mjr, we'll rename when closing */
-			g_snprintf(newname, 1024, "%s.mjr.%s", rec_file, rec_tempext);
-		}
+		g_snprintf(newname, 1024, "%s.mjr", rec_file);
 	}
 	/* Try opening the file now */
 	if(rec_dir == NULL) {
@@ -484,30 +448,6 @@ int janus_recorder_close(janus_recorder *recorder) {
 		fseek(recorder->file, 0L, SEEK_END);
 		size_t fsize = ftell(recorder->file);
 		JANUS_LOG(LOG_INFO, "File is %zu bytes: %s\n", fsize, recorder->filename);
-	}
-	if(rec_tempname) {
-		/* We need to rename the file, to remove the temporary extension */
-		char newname[1024];
-		memset(newname, 0, 1024);
-		g_snprintf(newname, strlen(recorder->filename)-strlen(rec_tempext), "%s", recorder->filename);
-		char oldpath[1024];
-		memset(oldpath, 0, 1024);
-		char newpath[1024];
-		memset(newpath, 0, 1024);
-		if(recorder->dir) {
-			g_snprintf(newpath, 1024, "%s/%s", recorder->dir, newname);
-			g_snprintf(oldpath, 1024, "%s/%s", recorder->dir, recorder->filename);
-		} else {
-			g_snprintf(newpath, 1024, "%s", newname);
-			g_snprintf(oldpath, 1024, "%s", recorder->filename);
-		}
-		if(rename(oldpath, newpath) != 0) {
-			JANUS_LOG(LOG_ERR, "Error renaming %s to %s...\n", recorder->filename, newname);
-		} else {
-			JANUS_LOG(LOG_INFO, "Recording renamed: %s\n", newname);
-			g_free(recorder->filename);
-			recorder->filename = g_strdup(newname);
-		}
 	}
 	janus_mutex_unlock_nodebug(&recorder->mutex);
 	return 0;
