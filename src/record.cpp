@@ -202,12 +202,11 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 		g_free(copy_for_base);
 		return NULL;
 	}
-	g_atomic_int_set(&rc->writable, 1);
+	rc->writable = 1;
 	/* We still need to also write the info header first */
-	g_atomic_int_set(&rc->header, 0);
-	janus_mutex_init(&rc->mutex);
+	rc->header = 0;
 	/* Done */
-	g_atomic_int_set(&rc->destroyed, 0);
+	rc->destroyed = 0;
 	g_free(copy_for_parent);
 	g_free(copy_for_base);
 	return rc;
@@ -216,58 +215,53 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 int janus_recorder_pause(janus_recorder *recorder) {
 	if(!recorder)
 		return -1;
-	if(g_atomic_int_compare_and_exchange(&recorder->paused, 0, 1))
+	if(!recorder->paused) {
+		recorder->paused = TRUE;
 		return 0;
+	}
 	return -2;
 }
 
 int janus_recorder_resume(janus_recorder *recorder) {
 	if(!recorder)
 		return -1;
-	janus_mutex_lock_nodebug(&recorder->mutex);
-	if(g_atomic_int_compare_and_exchange(&recorder->paused, 1, 0)) {
+	if(recorder->paused) {
+		recorder->paused = FALSE;
 		if(recorder->type == JANUS_RECORDER_AUDIO || recorder->type == JANUS_RECORDER_VIDEO) {
 			recorder->context.ts_reset = TRUE;
 			recorder->context.seq_reset = TRUE;
 			recorder->context.last_time = janus_get_monotonic_time();
 		}
-		janus_mutex_unlock_nodebug(&recorder->mutex);
 		return 0;
 	}
-	janus_mutex_unlock_nodebug(&recorder->mutex);
 	return -2;
 }
 
 int janus_recorder_add_extmap(janus_recorder *recorder, int id, const char *extmap) {
-	if(!recorder || g_atomic_int_get(&recorder->header) || id < 1 || id > 15 || extmap == NULL)
+	if(!recorder || recorder->header || id < 1 || id > 15 || extmap == NULL )
 		return -1;
-	janus_mutex_lock_nodebug(&recorder->mutex);
 	if(recorder->extensions == NULL)
 		recorder->extensions = g_hash_table_new_full(NULL, NULL, NULL, (GDestroyNotify)g_free);
 	g_hash_table_insert(recorder->extensions, GINT_TO_POINTER(id), g_strdup(extmap));
-	janus_mutex_unlock_nodebug(&recorder->mutex);
 	return 0;
 }
 
 int janus_recorder_description(janus_recorder *recorder, const char *description) {
 	if(!recorder || !description)
 		return -1;
-	janus_mutex_lock_nodebug(&recorder->mutex);
-	if(g_atomic_int_get(&recorder->header)) {
+	if(recorder->header) {
 		/* No use setting description once it's already written in the MJR file */
-		janus_mutex_unlock_nodebug(&recorder->mutex);
 		return 0;
 	}
 	g_free(recorder->description);
 	recorder->description = g_strdup(description);
-	janus_mutex_unlock_nodebug(&recorder->mutex);
 	return 0;
 }
 
 int janus_recorder_opusred(janus_recorder *recorder, int red_pt) {
 	if(!recorder)
 		return -1;
-	if(!g_atomic_int_get(&recorder->header)) {
+	if(!recorder->header) {
 		recorder->opusred_pt = red_pt;
 		return 0;
 	}
@@ -277,7 +271,7 @@ int janus_recorder_opusred(janus_recorder *recorder, int red_pt) {
 int janus_recorder_encrypted(janus_recorder *recorder) {
 	if(!recorder)
 		return -1;
-	if(!g_atomic_int_get(&recorder->header)) {
+	if(!recorder->header) {
 		recorder->encrypted = TRUE;
 		return 0;
 	}
@@ -287,25 +281,20 @@ int janus_recorder_encrypted(janus_recorder *recorder) {
 int janus_recorder_save_frame(janus_recorder *recorder, char *buffer, uint length) {
 	if(!recorder)
 		return -1;
-	janus_mutex_lock_nodebug(&recorder->mutex);
 	if(!buffer || length < 1) {
-		janus_mutex_unlock_nodebug(&recorder->mutex);
 		return -2;
 	}
 	if(!recorder->file) {
-		janus_mutex_unlock_nodebug(&recorder->mutex);
 		return -3;
 	}
-	if(!g_atomic_int_get(&recorder->writable)) {
-		janus_mutex_unlock_nodebug(&recorder->mutex);
+	if(!recorder->writable) {
 		return -4;
 	}
 	if(g_atomic_int_get(&recorder->paused)) {
-		janus_mutex_unlock_nodebug(&recorder->mutex);
 		return -5;
 	}
 	gint64 now = janus_get_monotonic_time();
-	if(!g_atomic_int_get(&recorder->header)) {
+	if(!recorder->header) {
 		/* Write info header as a JSON formatted info */
 		json_t *info = json_object();
 		/* FIXME Codecs should be configurable in the future */
@@ -354,7 +343,6 @@ int janus_recorder_save_frame(janus_recorder *recorder, char *buffer, uint lengt
 		json_decref(info);
 		if(info_text == NULL) {
 			JANUS_LOG(LOG_ERR, "Error converting header to text...\n");
-			janus_mutex_unlock_nodebug(&recorder->mutex);
 			return -5;
 		}
 		uint16_t info_bytes = htons(strlen(info_text));
@@ -371,7 +359,7 @@ int janus_recorder_save_frame(janus_recorder *recorder, char *buffer, uint lengt
 		free(info_text);
 		/* Done */
 		recorder->started = now;
-		g_atomic_int_set(&recorder->header, 1);
+		recorder->header = 1;
 	}
 	/* Write frame header (fixed part[4], timestamp[4], length[2]) */
 	size_t res = fwrite(frame_header, sizeof(char), strlen(frame_header), recorder->file);
@@ -423,7 +411,6 @@ int janus_recorder_save_frame(janus_recorder *recorder, char *buffer, uint lengt
 				header->seq_number = htons(seq);
 				header->timestamp = htonl(timestamp);
 			}
-			janus_mutex_unlock_nodebug(&recorder->mutex);
 			return -6;
 		}
 		tot -= temp;
@@ -436,26 +423,25 @@ int janus_recorder_save_frame(janus_recorder *recorder, char *buffer, uint lengt
 	}
 	fflush(recorder->file);
 	/* Done */
-	janus_mutex_unlock_nodebug(&recorder->mutex);
 	return 0;
 }
 
 int janus_recorder_close(janus_recorder *recorder) {
-	if(!recorder || !g_atomic_int_compare_and_exchange(&recorder->writable, 1, 0))
+	if(!recorder || !recorder->writable)
 		return -1;
-	janus_mutex_lock_nodebug(&recorder->mutex);
+	recorder ->writable = FALSE;
 	if(recorder->file) {
 		fseek(recorder->file, 0L, SEEK_END);
 		size_t fsize = ftell(recorder->file);
 		JANUS_LOG(LOG_INFO, "File is %zu bytes: %s\n", fsize, recorder->filename);
 	}
-	janus_mutex_unlock_nodebug(&recorder->mutex);
 	return 0;
 }
 
 void janus_recorder_destroy(janus_recorder *recorder) {
-	if(!recorder || !g_atomic_int_compare_and_exchange(&recorder->destroyed, 0, 1))
+	if(!recorder || recorder->destroyed)
 		return;
+	recorder->destroyed = TRUE;
 	janus_refcount_decrease(&recorder->ref);
 }
 

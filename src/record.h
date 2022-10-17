@@ -52,15 +52,13 @@ typedef struct janus_recorder {
 	/*! \brief Whether the recording contains end-to-end encrypted media or not */
 	gboolean encrypted;
 	/*! \brief Whether the info header for this recorder instance has already been written or not */
-	volatile int header;
+	gboolean header;
 	/*! \brief Whether this recorder instance can be used for writing or not */
-	int writable;
+	gboolean writable;
 	/*! \brief Whether writing s/RTP packets/data is paused */
-	int paused;
+	gboolean paused;
 	/*! \brief RTP switching context for rewriting RTP headers */
 	janus_rtp_switching_context context;
-	/*! \brief Mutex to lock/unlock this recorder instance */
-	janus_mutex mutex;
 	/*! \brief Atomic flag to check if this instance has been destroyed */
 	gint destroyed;
 	/*! \brief Reference counter for this instance */
