@@ -20,13 +20,6 @@ extern "C" {
 namespace ptt_audioroom
 {
 
-/*! \brief Media types we can record */
-typedef enum janus_recorder_medium {
-	JANUS_RECORDER_AUDIO,
-	JANUS_RECORDER_VIDEO,
-	JANUS_RECORDER_DATA
-} janus_recorder_medium;
-
 /*! \brief Structure that represents a recorder */
 typedef struct janus_recorder {
 	/*! \brief Absolute path to the directory where the recorder file is stored */
@@ -35,9 +28,9 @@ typedef struct janus_recorder {
 	char *filename;
 	/*! \brief Recording file */
 	FILE *file;
-	/*! \brief Codec the packets to record are encoded in ("vp8", "vp9", "h264", "opus", "pcma", "pcmu", "g722") */
+	/*! \brief Codec the packets to record are encoded in ("opus") */
 	char *codec;
-	/*! \brief Codec-specific info (e.g., H.264 or VP9 profile) */
+	/*! \brief Codec-specific info */
 	char *fmtp;
 	/*! \brief Stream description */
 	char *description;
@@ -45,8 +38,6 @@ typedef struct janus_recorder {
 	GHashTable *extensions;
 	/*! \brief When the recording file has been created and started */
 	gint64 created, started;
-	/*! \brief Media this instance is recording */
-	janus_recorder_medium type;
 	/*! \brief In case RED is used for Opus, its payload types */
 	int opusred_pt;
 	/*! \brief Whether the recording contains end-to-end encrypted media or not */
@@ -69,7 +60,7 @@ typedef struct janus_recorder {
  * \note If no target directory is provided, the current directory will be used. If no filename
  * is passed, a random filename will be used.
  * @param[in] dir Path of the directory to save the recording into (will try to create it if it doesn't exist)
- * @param[in] codec Codec the packets to record are encoded in ("vp8", "opus", "h264", "g711", "vp9")
+ * @param[in] codec Codec the packets to record are encoded in ("opus")
  * @param[in] filename Filename to use for the recording
  * @returns A valid janus_recorder instance in case of success, NULL otherwise */
 janus_recorder *janus_recorder_create(const char *dir, const char *codec, const char *filename);
@@ -77,8 +68,8 @@ janus_recorder *janus_recorder_create(const char *dir, const char *codec, const 
  * \note This is to allow adding more arguments to janus_recorder_create, but
  * still keep janus_recorder_create in place for backwards compatibility.
  * @param[in] dir Path of the directory to save the recording into (will try to create it if it doesn't exist)
- * @param[in] codec Codec the packets to record are encoded in ("vp8", "opus", "h264", "g711", "vp9")
- * @param[in] fmtp Codec-specific details (e.g., the H.264 or VP9 profile)
+ * @param[in] codec Codec the packets to record are encoded in ("opus")
+ * @param[in] fmtp Codec-specific details
  * @param[in] filename Filename to use for the recording
  * @returns A valid janus_recorder instance in case of success, NULL otherwise */
 janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, const char *fmtp, const char *filename);

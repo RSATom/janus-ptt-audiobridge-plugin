@@ -19,9 +19,6 @@ extern "C" {
 #include "janus/utils.h"
 }
 
-#define htonll(x) ((1==htonl(1)) ? (x) : ((gint64)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
-#define ntohll(x) ((1==ntohl(1)) ? (x) : ((gint64)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32))
-
 namespace ptt_audioroom
 {
 
@@ -55,22 +52,11 @@ janus_recorder *janus_recorder_create(const char *dir, const char *codec, const 
 	return janus_recorder_create_full(dir, codec, NULL, filename);
 }
 janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, const char *fmtp, const char *filename) {
-	janus_recorder_medium type = JANUS_RECORDER_AUDIO;
 	if(codec == NULL) {
 		JANUS_LOG(LOG_ERR, "Missing codec information\n");
 		return NULL;
 	}
-	if(!strcasecmp(codec, "vp8") || !strcasecmp(codec, "vp9") || !strcasecmp(codec, "h264")
-			 || !strcasecmp(codec, "av1") || !strcasecmp(codec, "h265")) {
-		type = JANUS_RECORDER_VIDEO;
-	} else if(!strcasecmp(codec, "opus") || !strcasecmp(codec, "multiopus")
-			|| !strcasecmp(codec, "g711") || !strcasecmp(codec, "pcmu") || !strcasecmp(codec, "pcma")
-			|| !strcasecmp(codec, "g722")) {
-		type = JANUS_RECORDER_AUDIO;
-	} else if(!strcasecmp(codec, "text") || !strcasecmp(codec, "binary")) {
-		/* Data channels may be text or binary, so that's what we can save too */
-		type = JANUS_RECORDER_DATA;
-	} else {
+	if(0 != strcasecmp(codec, "opus") && 0 != strcasecmp(codec, "multiopus")) {
 		/* We don't recognize the codec: while we might go on anyway, we'd rather fail instead */
 		JANUS_LOG(LOG_ERR, "Unsupported codec '%s'\n", codec);
 		return NULL;
@@ -191,7 +177,6 @@ janus_recorder *janus_recorder_create_full(const char *dir, const char *codec, c
 	if(rec_dir)
 		rc->dir = g_strdup(rec_dir);
 	rc->filename = g_strdup(newname);
-	rc->type = type;
 	/* Write the first part of the header */
 	size_t res = fwrite(header, sizeof(char), strlen(header), rc->file);
 	if(res != strlen(header)) {
@@ -227,11 +212,9 @@ int janus_recorder_resume(janus_recorder *recorder) {
 		return -1;
 	if(recorder->paused) {
 		recorder->paused = FALSE;
-		if(recorder->type == JANUS_RECORDER_AUDIO || recorder->type == JANUS_RECORDER_VIDEO) {
-			recorder->context.ts_reset = TRUE;
-			recorder->context.seq_reset = TRUE;
-			recorder->context.last_time = janus_get_monotonic_time();
-		}
+		recorder->context.ts_reset = TRUE;
+		recorder->context.seq_reset = TRUE;
+		recorder->context.last_time = janus_get_monotonic_time();
 		return 0;
 	}
 	return -2;
@@ -298,13 +281,7 @@ int janus_recorder_save_frame(janus_recorder *recorder, char *buffer, uint lengt
 		/* Write info header as a JSON formatted info */
 		json_t *info = json_object();
 		/* FIXME Codecs should be configurable in the future */
-		const char *type = NULL;
-		if(recorder->type == JANUS_RECORDER_AUDIO)
-			type = "a";
-		else if(recorder->type == JANUS_RECORDER_VIDEO)
-			type = "v";
-		else if(recorder->type == JANUS_RECORDER_DATA)
-			type = "d";
+		const char *type = "a";
 		json_object_set_new(info, "t", json_string(type));								/* Audio/Video/Data */
 		json_object_set_new(info, "c", json_string(recorder->codec));					/* Media codec */
 		if(recorder->fmtp)
@@ -334,7 +311,7 @@ int janus_recorder_save_frame(janus_recorder *recorder, char *buffer, uint lengt
 		json_object_set_new(info, "s", json_integer(recorder->created));				/* Created time */
 		json_object_set_new(info, "u", json_integer(janus_get_real_time()));			/* First frame written time */
 		/* If this is audio and using RED, take note of the payload type */
-		if(recorder->type == JANUS_RECORDER_AUDIO && recorder->opusred_pt > 0)
+		if(recorder->opusred_pt > 0)
 			json_object_set_new(info, "or", json_integer(recorder->opusred_pt));
 		/* If media will be end-to-end encrypted, mark it in the recording header */
 		if(recorder->encrypted)
@@ -374,53 +351,38 @@ int janus_recorder_save_frame(janus_recorder *recorder, char *buffer, uint lengt
 		JANUS_LOG(LOG_WARN, "Couldn't write frame timestamp in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
 			res, sizeof(uint32_t), g_strerror(errno));
 	}
-	uint16_t header_bytes = htons(recorder->type == JANUS_RECORDER_DATA ? (length+sizeof(gint64)) : length);
+	uint16_t header_bytes = htons(length);
 	res = fwrite(&header_bytes, sizeof(uint16_t), 1, recorder->file);
 	if(res != 1) {
 		JANUS_LOG(LOG_WARN, "Couldn't write size of frame in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
 			res, sizeof(uint16_t), g_strerror(errno));
 	}
-	if(recorder->type == JANUS_RECORDER_DATA) {
-		/* If it's data, then we need to prepend timing related info, as it's not there by itself */
-		gint64 now = htonll(janus_get_real_time());
-		res = fwrite(&now, sizeof(gint64), 1, recorder->file);
-		if(res != 1) {
-			JANUS_LOG(LOG_WARN, "Couldn't write data timestamp in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
-				res, sizeof(gint64), g_strerror(errno));
-		}
-	}
 	/* Edit packet header if needed */
 	janus_rtp_header *header = (janus_rtp_header *)buffer;
 	uint32_t ssrc = 0;
 	uint16_t seq = 0;
-	if(recorder->type != JANUS_RECORDER_DATA) {
-		ssrc = ntohl(header->ssrc);
-		seq = ntohs(header->seq_number);
-		timestamp = ntohl(header->timestamp);
-		janus_rtp_header_update(header, &recorder->context, recorder->type == JANUS_RECORDER_VIDEO, 0);
-	}
+	ssrc = ntohl(header->ssrc);
+	seq = ntohs(header->seq_number);
+	timestamp = ntohl(header->timestamp);
+	janus_rtp_header_update(header, &recorder->context, false, 0);
 	/* Save packet on file */
 	int temp = 0, tot = length;
 	while(tot > 0) {
 		temp = fwrite(buffer+length-tot, sizeof(char), tot, recorder->file);
 		if(temp <= 0) {
 			JANUS_LOG(LOG_ERR, "Error saving frame...\n");
-			if(recorder->type != JANUS_RECORDER_DATA) {
-				/* Restore packet header data */
-				header->ssrc = htonl(ssrc);
-				header->seq_number = htons(seq);
-				header->timestamp = htonl(timestamp);
-			}
+			/* Restore packet header data */
+			header->ssrc = htonl(ssrc);
+			header->seq_number = htons(seq);
+			header->timestamp = htonl(timestamp);
 			return -6;
 		}
 		tot -= temp;
 	}
-	if(recorder->type != JANUS_RECORDER_DATA) {
-		/* Restore packet header data */
-		header->ssrc = htonl(ssrc);
-		header->seq_number = htons(seq);
-		header->timestamp = htonl(timestamp);
-	}
+	/* Restore packet header data */
+	header->ssrc = htonl(ssrc);
+	header->seq_number = htons(seq);
+	header->timestamp = htonl(timestamp);
 	fflush(recorder->file);
 	/* Done */
 	return 0;
