@@ -30,8 +30,6 @@ typedef struct audio_recorder {
 	FILE *file;
 	/*! \brief Codec the packets to record are encoded in ("opus") */
 	char *codec;
-	/*! \brief Stream description */
-	char *description;
 	/*! \brief List of RTP extensions (as a hashtable, indexed by ID) in this recording */
 	GHashTable *extensions;
 	/*! \brief When the recording file has been created and started */
@@ -65,11 +63,6 @@ audio_recorder *audio_recorder_create(const char *dir, const char *codec, const 
  * @param[in] recorder The audio_recorder to pause
  * @returns 0 in case of success, a negative integer otherwise */
 int audio_recorder_add_extmap(audio_recorder *recorder, int id, const char *extmap);
-/*! \brief Set the description for this recording
- * @param[in] recorder The audio_recorder instance to add the description to
- * @param[in] description The description
- * @returns 0 in case of success, a negative integer otherwise */
-int audio_recorder_description(audio_recorder *recorder, const char *description);
 /*! \brief Mark this recording as using RED for audio
  * \note This will only be possible BEFORE the first frame is written, as it needs to
  * be reflected in the .mjr header: doing this after that will return an error.

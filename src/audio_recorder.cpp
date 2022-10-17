@@ -63,7 +63,6 @@ audio_recorder *audio_recorder_create(const char *dir, const char *codec, const 
 	rc->filename = NULL;
 	rc->file = NULL;
 	rc->codec = g_strdup(codec);
-	rc->description = NULL;
 	rc->created = janus_get_real_time();
 	const char *rec_dir = NULL;
 	const char *rec_file = NULL;
@@ -199,18 +198,6 @@ int audio_recorder_add_extmap(audio_recorder *recorder, int id, const char *extm
 	return 0;
 }
 
-int audio_recorder_description(audio_recorder *recorder, const char *description) {
-	if(!recorder || !description)
-		return -1;
-	if(recorder->header) {
-		/* No use setting description once it's already written in the MJR file */
-		return 0;
-	}
-	g_free(recorder->description);
-	recorder->description = g_strdup(description);
-	return 0;
-}
-
 int audio_recorder_opusred(audio_recorder *recorder, int red_pt) {
 	if(!recorder)
 		return -1;
@@ -251,8 +238,6 @@ int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint lengt
 		const char *type = "a";
 		json_object_set_new(info, "t", json_string(type));								/* Audio/Video/Data */
 		json_object_set_new(info, "c", json_string(recorder->codec));					/* Media codec */
-		if(recorder->description)
-			json_object_set_new(info, "d", json_string(recorder->description));		/* Stream description */
 		if(recorder->extensions) {
 			/* Add the extmaps to the JSON object */
 			json_t *extmaps = NULL;
