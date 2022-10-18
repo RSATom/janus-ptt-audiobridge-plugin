@@ -25,8 +25,6 @@ void janus_audiobridge_room_free(const janus_refcount *audiobridge_ref) {
 	g_hash_table_destroy(audiobridge->allowed);
 	if(audiobridge->rtp_udp_sock > 0)
 		close(audiobridge->rtp_udp_sock);
-	if(audiobridge->rtp_encoder)
-		opus_encoder_destroy(audiobridge->rtp_encoder);
 	g_hash_table_destroy(audiobridge->rtp_forwarders);
 	delete audiobridge;
 }

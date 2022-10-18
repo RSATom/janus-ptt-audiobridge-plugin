@@ -66,10 +66,6 @@ void janus_audiobridge_participant_free(const janus_refcount *participant_ref) {
 	/* This participant can be destroyed, free all the resources */
 	g_free(participant->user_id_str);
 	g_free(participant->display);
-	if(participant->encoder)
-		opus_encoder_destroy(participant->encoder);
-	if(participant->decoder)
-		opus_decoder_destroy(participant->decoder);
 	while(participant->inbuf) {
 		GList *first = g_list_first(participant->inbuf);
 		janus_audiobridge_rtp_relay_packet *pkt = (janus_audiobridge_rtp_relay_packet *)first->data;
@@ -77,14 +73,6 @@ void janus_audiobridge_participant_free(const janus_refcount *participant_ref) {
 		if(pkt)
 			g_free(pkt->data);
 		g_free(pkt);
-	}
-	if(participant->outbuf != NULL) {
-		while(g_async_queue_length(participant->outbuf) > 0) {
-			janus_audiobridge_rtp_relay_packet *pkt = (janus_audiobridge_rtp_relay_packet *)g_async_queue_pop(participant->outbuf);
-			g_free(pkt->data);
-			g_free(pkt);
-		}
-		g_async_queue_unref(participant->outbuf);
 	}
 	delete participant;
 }
