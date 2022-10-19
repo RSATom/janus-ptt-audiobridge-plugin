@@ -1,8 +1,36 @@
 #include "ptt_room.h"
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+
+#include "ptt_audioroom_plugin.h"
+
 
 namespace ptt_audioroom
 {
+
+int create_udp_socket_if_needed(ptt_room *audiobridge) {
+	if(audiobridge->rtp_udp_sock > 0) {
+		return 0;
+	}
+
+	audiobridge->rtp_udp_sock = socket(!ipv6_disabled ? AF_INET6 : AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if(audiobridge->rtp_udp_sock <= 0) {
+		JANUS_LOG(LOG_ERR, "Could not open UDP socket for RTP forwarder (room %s), %d (%s)\n",
+			audiobridge->room_id_str, errno, g_strerror(errno));
+		return -1;
+	}
+	if(!ipv6_disabled) {
+		int v6only = 0;
+		if(setsockopt(audiobridge->rtp_udp_sock, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only)) != 0) {
+			JANUS_LOG(LOG_ERR, "Could not configure UDP socket for RTP forwarder (room %s), %d (%s))\n",
+				audiobridge->room_id_str, errno, g_strerror(errno));
+			return -1;
+		}
+	}
+
+	return 0;
+}
 
 void ptt_room_destroy(ptt_room *audiobridge) {
 	if(!audiobridge)

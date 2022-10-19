@@ -37,9 +37,4 @@ extern gboolean lock_rtpfwd;
 
 void* participants_sender_thread(void* data);
 
-int create_udp_socket_if_needed(ptt_room *audiobridge);
-guint32 rtp_forwarder_add_helper(ptt_room *room,
-		const gchar *host, uint16_t port, uint32_t ssrc, int pt,
-		int srtp_suite, const char *srtp_crypto,
-		gboolean always_on, guint32 stream_id);
 }

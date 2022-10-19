@@ -32,6 +32,11 @@ struct rtp_forwarder {
 	janus_refcount ref;
 };
 
+guint32 rtp_forwarder_add_helper(ptt_room *room,
+		const gchar *host, uint16_t port, uint32_t ssrc, int pt,
+		int srtp_suite, const char *srtp_crypto,
+		gboolean always_on, guint32 stream_id);
+
 void rtp_forwarder_destroy(rtp_forwarder *rf);
 void rtp_forwarder_free(const janus_refcount *f_ref);
 
