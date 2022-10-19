@@ -10,6 +10,8 @@ extern "C" {
 
 namespace ptt_audioroom
 {
+extern GHashTable* sessions;
+extern janus_mutex sessions_mutex;
 
 struct janus_audiobridge_participant;
 
@@ -27,5 +29,7 @@ struct janus_audiobridge_session {
 
 void janus_audiobridge_session_destroy(janus_audiobridge_session *session);
 void janus_audiobridge_session_free(const janus_refcount *session_ref);
+
+janus_audiobridge_session* janus_audiobridge_lookup_session(janus_plugin_session *handle);
 
 }
