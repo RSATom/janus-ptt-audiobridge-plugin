@@ -33,7 +33,6 @@ struct janus_audiobridge_room {
 	GHashTable *participants;	/* Map of participants */
 	struct janus_audiobridge_participant* unmutedParticipant;
 	gboolean check_tokens;		/* Whether to check tokens when participants join (see below) */
-	gboolean muted;				/* Whether the room is globally muted (except for admins and played files) */
 	GHashTable *allowed;		/* Map of participants (as tokens) allowed to join */
 	GThread *thread;			/* Mixer thread for this room */
 	gint destroyed;	/* Whether this room has been destroyed */
