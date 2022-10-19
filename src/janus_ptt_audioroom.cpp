@@ -4,7 +4,9 @@
  * \copyright GNU General Public License v3
  */
 
+#include <cassert>
 #include <memory>
+#include <thread>
 
 #include <glib.h>
 
@@ -41,6 +43,7 @@ extern "C" {
 #include "janus_audiobridge_rtp_forwarder.h"
 #include "janus_audiobridge_message.h"
 #include "record.h"
+#include "thread_type.h"
 using namespace ptt_audioroom;
 
 /* Plugin information */
@@ -803,6 +806,8 @@ void janus_audiobridge_create_session(janus_plugin_session *handle, int *error) 
 }
 
 void janus_audiobridge_destroy_session(janus_plugin_session *handle, int *error) {
+	assert_thread_type_is(thread_type::INCOMING_RTP);
+
 	if(g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized)) {
 		*error = -1;
 		return;
@@ -2505,6 +2510,8 @@ admin_response:
 }
 
 void janus_audiobridge_setup_media(janus_plugin_session *handle) {
+	assign_thread_type(thread_type::INCOMING_RTP);
+
 	JANUS_LOG(LOG_INFO, "[%s-%p] WebRTC media is now available\n", JANUS_AUDIOBRIDGE_PACKAGE, handle);
 	if(g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized))
 		return;
@@ -2524,6 +2531,10 @@ void janus_audiobridge_setup_media(janus_plugin_session *handle) {
 		janus_mutex_unlock(&sessions_mutex);
 		return;
 	}
+
+	assert(participant->incoming_rtp_thread_id == std::thread::id() || participant->incoming_rtp_thread_id == std::this_thread::get_id());
+	participant->incoming_rtp_thread_id = std::this_thread::get_id();
+
 	g_atomic_int_set(&session->hangingup, 0);
 	/* FIXME Only send this peer the audio mix when we get this event */
 	g_atomic_int_set(&session->started, 1);
@@ -2569,6 +2580,8 @@ void janus_audiobridge_setup_media(janus_plugin_session *handle) {
 }
 
 void janus_audiobridge_incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *packet) {
+	assert_thread_type_is(thread_type::INCOMING_RTP);
+
 	if(handle == NULL || g_atomic_int_get(&handle->stopped) || g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized))
 		return;
 	janus_audiobridge_session *session = (janus_audiobridge_session *)handle->plugin_handle;
@@ -2577,6 +2590,9 @@ void janus_audiobridge_incoming_rtp(janus_plugin_session *handle, janus_plugin_r
 	janus_audiobridge_participant *participant = (janus_audiobridge_participant *)session->participant;
 	if(!g_atomic_int_get(&participant->active) || participant->muted || !participant->room)
 		return;
+
+	assert(participant->incoming_rtp_thread_id == std::this_thread::get_id());
+
 	char *buf = packet->buffer;
 	uint16_t len = packet->length;
 	/* Save the frame if we're recording this leg */
@@ -2757,12 +2773,16 @@ void janus_audiobridge_incoming_rtp(janus_plugin_session *handle, janus_plugin_r
 }
 
 void janus_audiobridge_incoming_rtcp(janus_plugin_session *handle, janus_plugin_rtcp *packet) {
+	assert_thread_type_is(thread_type::INCOMING_RTP);
+
 	if(handle == NULL || g_atomic_int_get(&handle->stopped) || g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized))
 		return;
 	/* janus_audiobridge_room *FIXME Should we care? */
 }
 
 void janus_audiobridge_hangup_media(janus_plugin_session *handle) {
+	assert_thread_type_is(thread_type::INCOMING_RTP);
+
 	JANUS_LOG(LOG_INFO, "[%s-%p] No WebRTC media anymore\n", JANUS_AUDIOBRIDGE_PACKAGE, handle);
 	janus_mutex_lock(&sessions_mutex);
 	janus_audiobridge_hangup_media_internal(handle);
@@ -2770,6 +2790,8 @@ void janus_audiobridge_hangup_media(janus_plugin_session *handle) {
 }
 
 static void janus_audiobridge_hangup_media_internal(janus_plugin_session *handle) {
+	assert_thread_type_is(thread_type::INCOMING_RTP);
+
 	JANUS_LOG(LOG_INFO, "No WebRTC media anymore\n");
 	if(g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized))
 		return;
@@ -2783,6 +2805,10 @@ static void janus_audiobridge_hangup_media_internal(janus_plugin_session *handle
 		return;
 	if(!g_atomic_int_compare_and_exchange(&session->hangingup, 0, 1))
 		return;
+
+	assert(session->participant->incoming_rtp_thread_id == std::thread::id() || session->participant->incoming_rtp_thread_id == std::this_thread::get_id());
+	session->participant->incoming_rtp_thread_id = std::thread::id();
+
 	/* Get rid of participant */
 	janus_audiobridge_participant *participant = (janus_audiobridge_participant *)session->participant;
 	janus_mutex_lock(&rooms_mutex);

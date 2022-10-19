@@ -1,5 +1,7 @@
 #pragma once
 
+#include <thread>
+
 #include <glib.h>
 
 #include <opus/opus.h>
@@ -54,6 +56,8 @@ struct janus_audiobridge_participant {
 	audio_recorder *arc;		/* The Janus recorder instance for this user's audio, if enabled */
 	janus_mutex rec_mutex;		/* Mutex to protect the recorder from race conditions */
 	gint destroyed;	/* Whether this room has been destroyed */
+
+	std::thread::id incoming_rtp_thread_id;
 };
 
 void janus_audiobridge_recorder_create(janus_audiobridge_participant *participant);
