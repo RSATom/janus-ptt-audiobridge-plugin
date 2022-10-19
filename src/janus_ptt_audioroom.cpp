@@ -36,6 +36,7 @@ extern "C" {
 #include "janus/ip-utils.h"
 }
 
+#include "constants.h"
 #include "janus_audiobridge_session.h"
 #include "janus_audiobridge_room.h"
 #include "janus_audiobridge_participant.h"
@@ -45,19 +46,6 @@ extern "C" {
 #include "record.h"
 #include "thread_type.h"
 using namespace ptt_audioroom;
-
-/* Plugin information */
-#define JANUS_AUDIOBRIDGE_VERSION			12
-#define JANUS_AUDIOBRIDGE_VERSION_STRING	"0.0.12"
-#define JANUS_AUDIOBRIDGE_DESCRIPTION		""
-#define JANUS_AUDIOBRIDGE_NAME				"JANUS PTT Audio Room plugin"
-#define JANUS_AUDIOBRIDGE_AUTHOR			"Meetecho s.r.l. && Sergey Radionov <rsatom@gmail.com>"
-#define JANUS_AUDIOBRIDGE_PACKAGE			"janus.plugin.ptt-audioroom"
-
-#define MIN_SEQUENTIAL 						2
-#define MAX_MISORDER						50
-
-static const gint64 PTT_NO_AUDIO_TIMEOUT = 5; // seconds
 
 /* Plugin methods */
 extern "C" janus_plugin *create(void);
@@ -309,36 +297,6 @@ static guint32 janus_audiobridge_rtp_forwarder_add_helper(janus_audiobridge_room
 	return actual_stream_id;
 }
 
-
-/* Mixer settings */
-#define DEFAULT_PREBUFFERING	6
-#define MAX_PREBUFFERING		50
-
-
-/* Opus settings */
-#define	OPUS_SAMPLES	960
-#define	BUFFER_SAMPLES	OPUS_SAMPLES*12
-#define DEFAULT_COMPLEXITY	4
-
-
-/* Error codes */
-#define JANUS_AUDIOBRIDGE_ERROR_UNKNOWN_ERROR	499
-#define JANUS_AUDIOBRIDGE_ERROR_NO_MESSAGE		480
-#define JANUS_AUDIOBRIDGE_ERROR_INVALID_JSON	481
-#define JANUS_AUDIOBRIDGE_ERROR_INVALID_REQUEST	482
-#define JANUS_AUDIOBRIDGE_ERROR_MISSING_ELEMENT	483
-#define JANUS_AUDIOBRIDGE_ERROR_INVALID_ELEMENT	484
-#define JANUS_AUDIOBRIDGE_ERROR_NO_SUCH_ROOM	485
-#define JANUS_AUDIOBRIDGE_ERROR_ROOM_EXISTS		486
-#define JANUS_AUDIOBRIDGE_ERROR_NOT_JOINED		487
-#define JANUS_AUDIOBRIDGE_ERROR_LIBOPUS_ERROR	488
-#define JANUS_AUDIOBRIDGE_ERROR_UNAUTHORIZED	489
-#define JANUS_AUDIOBRIDGE_ERROR_ID_EXISTS		490
-#define JANUS_AUDIOBRIDGE_ERROR_ALREADY_JOINED	491
-#define JANUS_AUDIOBRIDGE_ERROR_NO_SUCH_USER	492
-#define JANUS_AUDIOBRIDGE_ERROR_INVALID_SDP		493
-#define JANUS_AUDIOBRIDGE_ERROR_NO_SUCH_GROUP	494
-#define JANUS_AUDIOBRIDGE_ERROR_ROOM_ALREADY_HAS_UNMUTED_USER	600
 
 static int janus_audiobridge_create_udp_socket_if_needed(janus_audiobridge_room *audiobridge) {
 	if(audiobridge->rtp_udp_sock > 0) {
