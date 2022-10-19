@@ -32,7 +32,6 @@ extern "C" {
 #include "janus/mutex.h"
 #include "janus/rtp.h"
 #include "janus/rtpsrtp.h"
-#include "janus/rtcp.h"
 #include "janus/sdp-utils.h"
 #include "janus/utils.h"
 #include "janus/ip-utils.h"
@@ -66,7 +65,6 @@ static void create_session(janus_plugin_session *handle, int *error);
 // following function bound to thread_type::INCOMING_RTP
 static void setup_media(janus_plugin_session *handle);
 static void incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *packet);
-static void incoming_rtcp(janus_plugin_session *handle, janus_plugin_rtcp *packet);
 static void hangup_media(janus_plugin_session *handle);
 static void destroy_session(janus_plugin_session *handle, int *error);
 
@@ -90,7 +88,6 @@ janus_plugin ptt_audioroom_plugin =
 		.handle_admin_message = handle_admin_message,
 		.setup_media = setup_media,
 		.incoming_rtp = incoming_rtp,
-		.incoming_rtcp = incoming_rtcp,
 		.hangup_media = hangup_media,
 		.destroy_session = destroy_session,
 		.query_session = query_session,
@@ -868,13 +865,6 @@ void incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *packet) {
 		}
 		janus_mutex_unlock(&participant->qmutex);
 	}
-}
-
-void incoming_rtcp(janus_plugin_session *handle, janus_plugin_rtcp *packet) {
-	assert_thread_type_is(thread_type::INCOMING_RTP);
-
-	if(handle == NULL || g_atomic_int_get(&handle->stopped) || g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized))
-		return;
 }
 
 void hangup_media(janus_plugin_session *handle) {
