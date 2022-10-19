@@ -1,20 +1,20 @@
-#include "janus_audiobridge_participant.h"
+#include "room_participant.h"
 
 extern "C" {
 #include "janus/utils.h"
 }
 
-#include "janus_audiobridge_room.h"
-#include "janus_audiobridge_rtp_relay_packet.h"
+#include "ptt_room.h"
+#include "rtp_relay_packet.h"
 
 
 namespace ptt_audioroom
 {
 
-void janus_audiobridge_recorder_create(janus_audiobridge_participant *participant) {
+void recorder_create(room_participant *participant) {
 	if(participant == NULL || participant->room == NULL)
 		return;
-	janus_audiobridge_room *audiobridge = participant->room;
+	ptt_room *audiobridge = participant->room;
 	char filename[255];
 	audio_recorder *rc = NULL;
 	gint64 now = janus_get_real_time();
@@ -34,7 +34,7 @@ void janus_audiobridge_recorder_create(janus_audiobridge_participant *participan
 	}
 }
 
-void janus_audiobridge_recorder_close(janus_audiobridge_participant *participant) {
+void recorder_close(room_participant *participant) {
 	if(participant->arc) {
 		audio_recorder *rc = participant->arc;
 		participant->arc = NULL;
@@ -44,7 +44,7 @@ void janus_audiobridge_recorder_close(janus_audiobridge_participant *participant
 	}
 }
 
-void janus_audiobridge_participant_destroy(janus_audiobridge_participant *participant) {
+void participant_destroy(room_participant *participant) {
 	if(!participant)
 		return;
 	if(!g_atomic_int_compare_and_exchange(&participant->destroyed, 0, 1))
@@ -53,22 +53,22 @@ void janus_audiobridge_participant_destroy(janus_audiobridge_participant *partic
 	janus_refcount_decrease(&participant->ref);
 }
 
-void janus_audiobridge_participant_unref(janus_audiobridge_participant *participant) {
+void participant_unref(room_participant *participant) {
 	if(!participant)
 		return;
 	/* Just decrease the counter */
 	janus_refcount_decrease(&participant->ref);
 }
 
-void janus_audiobridge_participant_free(const janus_refcount *participant_ref) {
-	static_assert(std::is_standard_layout<janus_audiobridge_participant>::value);
-	janus_audiobridge_participant *participant = (janus_audiobridge_participant*)participant_ref;
+void participant_free(const janus_refcount *participant_ref) {
+	static_assert(std::is_standard_layout<room_participant>::value);
+	room_participant *participant = (room_participant*)participant_ref;
 	/* This participant can be destroyed, free all the resources */
 	g_free(participant->user_id_str);
 	g_free(participant->display);
 	while(participant->inbuf) {
 		GList *first = g_list_first(participant->inbuf);
-		janus_audiobridge_rtp_relay_packet *pkt = (janus_audiobridge_rtp_relay_packet *)first->data;
+		rtp_relay_packet *pkt = (rtp_relay_packet *)first->data;
 		participant->inbuf = g_list_delete_link(participant->inbuf, first);
 		if(pkt)
 			g_free(pkt->data);

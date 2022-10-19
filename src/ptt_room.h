@@ -14,7 +14,7 @@ extern "C" {
 namespace ptt_audioroom
 {
 
-struct janus_audiobridge_room {
+struct ptt_room {
 	janus_refcount ref;			/* Reference counter for this room */
 	gchar *room_id_str;			/* Unique room ID (when using strings) */
 	gchar *room_name;			/* Room description */
@@ -31,7 +31,7 @@ struct janus_audiobridge_room {
 	gchar *mjrs_dir;			/* Folder to save the mjrs file to */
 	gboolean destroy;			/* Value to flag the room for destruction */
 	GHashTable *participants;	/* Map of participants */
-	struct janus_audiobridge_participant* unmutedParticipant;
+	struct room_participant* unmutedParticipant;
 	gboolean check_tokens;		/* Whether to check tokens when participants join (see below) */
 	GHashTable *allowed;		/* Map of participants (as tokens) allowed to join */
 	GThread *thread;			/* Mixer thread for this room */
@@ -43,7 +43,7 @@ struct janus_audiobridge_room {
 	int rtp_udp_sock;			/* UDP socket to use to forward RTP packets */
 };
 
-void janus_audiobridge_room_destroy(janus_audiobridge_room *audiobridge);
-void janus_audiobridge_room_free(const janus_refcount *audiobridge_ref);
+void ptt_room_destroy(ptt_room *audiobridge);
+void ptt_room_free(const janus_refcount *audiobridge_ref);
 
 }

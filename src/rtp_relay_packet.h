@@ -10,7 +10,7 @@ extern "C" {
 namespace ptt_audioroom
 {
 
-struct janus_audiobridge_rtp_relay_packet {
+struct rtp_relay_packet {
 	janus_rtp_header *data;
 	gint length;
 	uint32_t ssrc;
@@ -19,6 +19,6 @@ struct janus_audiobridge_rtp_relay_packet {
 	gboolean silence;
 };
 
-gint janus_audiobridge_rtp_sort(gconstpointer a, gconstpointer b);
+gint rtp_sort(gconstpointer a, gconstpointer b);
 
 }

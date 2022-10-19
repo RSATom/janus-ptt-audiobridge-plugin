@@ -12,10 +12,10 @@ extern "C" {
 namespace ptt_audioroom
 {
 
-struct janus_audiobridge_room;
+struct ptt_room;
 
 /* RTP forwarder instance: address to send to, and current RTP header info */
-struct janus_audiobridge_rtp_forwarder {
+struct rtp_forwarder {
 	struct sockaddr_in serv_addr;
 	struct sockaddr_in6 serv_addr6;
 	uint32_t ssrc;
@@ -32,7 +32,7 @@ struct janus_audiobridge_rtp_forwarder {
 	janus_refcount ref;
 };
 
-void janus_audiobridge_rtp_forwarder_destroy(janus_audiobridge_rtp_forwarder *rf);
-void janus_audiobridge_rtp_forwarder_free(const janus_refcount *f_ref);
+void rtp_forwarder_destroy(rtp_forwarder *rf);
+void rtp_forwarder_free(const janus_refcount *f_ref);
 
 }

@@ -8,14 +8,14 @@ extern "C" {
 #include "janus/mutex.h"
 }
 
-#include "janus_audiobridge_session.h"
-#include "janus_audiobridge_room.h"
+#include "plugin_session.h"
+#include "ptt_room.h"
 
 
 namespace ptt_audioroom
 {
 
-extern janus_plugin janus_audiobridge_plugin;
+extern janus_plugin ptt_audioroom_plugin;
 
 extern janus_callbacks* gateway;
 
@@ -35,10 +35,10 @@ extern janus_mutex rooms_mutex;
 extern char* admin_key;
 extern gboolean lock_rtpfwd;
 
-void* janus_audiobridge_sender_thread(void* data);
+void* participants_sender_thread(void* data);
 
-int janus_audiobridge_create_udp_socket_if_needed(janus_audiobridge_room *audiobridge);
-guint32 janus_audiobridge_rtp_forwarder_add_helper(janus_audiobridge_room *room,
+int create_udp_socket_if_needed(ptt_room *audiobridge);
+guint32 rtp_forwarder_add_helper(ptt_room *room,
 		const gchar *host, uint16_t port, uint32_t ssrc, int pt,
 		int srtp_suite, const char *srtp_crypto,
 		gboolean always_on, guint32 stream_id);

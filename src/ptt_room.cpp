@@ -1,10 +1,10 @@
-#include "janus_audiobridge_room.h"
+#include "ptt_room.h"
 
 
 namespace ptt_audioroom
 {
 
-void janus_audiobridge_room_destroy(janus_audiobridge_room *audiobridge) {
+void ptt_room_destroy(ptt_room *audiobridge) {
 	if(!audiobridge)
 		return;
 	if(!g_atomic_int_compare_and_exchange(&audiobridge->destroyed, 0, 1))
@@ -13,9 +13,9 @@ void janus_audiobridge_room_destroy(janus_audiobridge_room *audiobridge) {
 	janus_refcount_decrease(&audiobridge->ref);
 }
 
-void janus_audiobridge_room_free(const janus_refcount *audiobridge_ref) {
-	static_assert(std::is_standard_layout<janus_audiobridge_room>::value);
-	janus_audiobridge_room *audiobridge =(janus_audiobridge_room*)audiobridge_ref;
+void ptt_room_free(const janus_refcount *audiobridge_ref) {
+	static_assert(std::is_standard_layout<ptt_room>::value);
+	ptt_room *audiobridge =(ptt_room*)audiobridge_ref;
 	/* This room can be destroyed, free all the resources */
 	g_free(audiobridge->room_id_str);
 	g_free(audiobridge->room_name);

@@ -18,13 +18,13 @@ extern "C" {
 namespace ptt_audioroom
 {
 
-struct janus_audiobridge_session;
-struct janus_audiobridge_room;
+struct plugin_session;
+struct ptt_room;
 
-struct janus_audiobridge_participant {
+struct room_participant {
 	janus_refcount ref;			/* Reference counter for this participant */
-	janus_audiobridge_session *session;
-	janus_audiobridge_room *room;	/* Room */
+	plugin_session *session;
+	ptt_room *room;	/* Room */
 	gchar *user_id_str;		/* Unique ID in the room (when using strings) */
 	gchar *display;			/* Display name (opaque value, only meaningful to application) */
 	gboolean admin;			/* If the participant is an admin (can't be globally muted) */
@@ -60,11 +60,11 @@ struct janus_audiobridge_participant {
 	std::thread::id incoming_rtp_thread_id;
 };
 
-void janus_audiobridge_recorder_create(janus_audiobridge_participant *participant);
-void janus_audiobridge_recorder_close(janus_audiobridge_participant *participant);
+void recorder_create(room_participant *participant);
+void recorder_close(room_participant *participant);
 
-void janus_audiobridge_participant_destroy(janus_audiobridge_participant *participant);
-void janus_audiobridge_participant_unref(janus_audiobridge_participant *participant);
-void janus_audiobridge_participant_free(const janus_refcount *participant_ref);
+void participant_destroy(room_participant *participant);
+void participant_unref(room_participant *participant);
+void participant_free(const janus_refcount *participant_ref);
 
 }
