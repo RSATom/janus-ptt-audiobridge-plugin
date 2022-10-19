@@ -17,6 +17,7 @@ struct janus_audiobridge_session {
 	janus_plugin_session *handle;
 	gint64 sdp_sessid;
 	gint64 sdp_version;
+	// once assinged will be alive (and never changed) while janus_audiobridge_session is alive
 	janus_audiobridge_participant* participant;
 	volatile gint started;
 	gint hangingup;

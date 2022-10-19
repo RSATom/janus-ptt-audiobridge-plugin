@@ -73,12 +73,14 @@ static const char *janus_audiobridge_get_package(void);
 static void janus_audiobridge_create_session(janus_plugin_session *handle, int *error);
 static struct janus_plugin_result *janus_audiobridge_handle_message(janus_plugin_session *handle, char *transaction, json_t *message, json_t *jsep);
 static json_t *janus_audiobridge_handle_admin_message(json_t *message);
+static json_t *janus_audiobridge_query_session(janus_plugin_session *handle);
+
+// following function bound to thread_type::INCOMING_RTP
 static void janus_audiobridge_setup_media(janus_plugin_session *handle);
 static void janus_audiobridge_incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *packet);
 static void janus_audiobridge_incoming_rtcp(janus_plugin_session *handle, janus_plugin_rtcp *packet);
 static void janus_audiobridge_hangup_media(janus_plugin_session *handle);
 static void janus_audiobridge_destroy_session(janus_plugin_session *handle, int *error);
-static json_t *janus_audiobridge_query_session(janus_plugin_session *handle);
 
 /* Plugin setup */
 static janus_plugin janus_audiobridge_plugin =
