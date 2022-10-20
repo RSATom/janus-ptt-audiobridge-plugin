@@ -1,5 +1,7 @@
 #include "ptt_room.h"
 
+#include <type_traits>
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 

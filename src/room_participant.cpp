@@ -1,5 +1,7 @@
 #include "room_participant.h"
 
+#include <type_traits>
+
 extern "C" {
 #include "janus/utils.h"
 }
