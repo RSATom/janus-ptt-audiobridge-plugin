@@ -47,6 +47,7 @@ extern "C" {
 #include "event_handlers.h"
 #include "record.h"
 #include "thread_type.h"
+#include "janus_mutex_lock_guard.h"
 using namespace ptt_audioroom;
 
 /* Plugin methods */
@@ -1070,9 +1071,8 @@ void *participants_sender_thread(void *data) {
 
 		if(unmutedParticipant) {
 			room_participant *p = unmutedParticipant;
-			janus_mutex_lock(&p->qmutex);
+			janus_mutex_lock_guard inbuf_lock_guard(&p->qmutex);
 			if(g_atomic_int_get(&p->destroyed) || !p->session || !g_atomic_int_get(&p->session->started) || !g_atomic_int_get(&p->active) || p->prebuffering || !p->inbuf) {
-				janus_mutex_unlock(&p->qmutex);
 				continue;
 			}
 
@@ -1105,7 +1105,7 @@ void *participants_sender_thread(void *data) {
 			}
 
 			/* Forward the packet as RTP to any RTP forwarder that may be listening */
-			janus_mutex_lock(&audiobridge->rtp_mutex);
+			janus_mutex_lock_guard forwarders_lock_guard(&audiobridge->rtp_mutex);
 			if(g_hash_table_size(audiobridge->rtp_forwarders) > 0) {
 				/* If the room is empty, check if there's any RTP forwarder with an "always on" option */
 				gboolean go_on = FALSE;
@@ -1174,7 +1174,6 @@ void *participants_sender_thread(void *data) {
 					}
 				}
 			}
-			janus_mutex_unlock(&audiobridge->rtp_mutex);
 
 			if(pkt) {
 				g_free(pkt->data);
@@ -1182,8 +1181,6 @@ void *participants_sender_thread(void *data) {
 				g_free(pkt);
 				pkt = NULL;
 			}
-
-			janus_mutex_unlock(&p->qmutex);
 		}
 
 		ps = participants_list;
