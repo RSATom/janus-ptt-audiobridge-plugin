@@ -26,39 +26,6 @@ void clear_inbuf(room_participant* participant, bool lock_qmutex)
 	if(lock_qmutex) janus_mutex_unlock(&participant->qmutex);
 }
 
-void recorder_create(room_participant *participant) {
-	if(participant == NULL || participant->room == NULL)
-		return;
-	ptt_room *audiobridge = participant->room;
-	char filename[255];
-	audio_recorder *rc = NULL;
-	gint64 now = janus_get_real_time();
-	if(participant->arc == NULL) {
-		memset(filename, 0, 255);
-		/* Build a filename */
-		g_snprintf(filename, 255, "audiobridge-%s-user-%s-%" SCNi64 "-audio",
-			audiobridge->room_id_str, participant->user_id_str, now);
-		rc = audio_recorder_create(audiobridge->mjrs_dir,
-			janus_audiocodec_name(JANUS_AUDIOCODEC_OPUS), filename);
-		if(rc == NULL) {
-			JANUS_LOG(LOG_ERR, "Couldn't open an audio recording file for this participant!\n");
-		}
-		if(participant->extmap_id > 0)
-			audio_recorder_add_extmap(rc, participant->extmap_id, JANUS_RTP_EXTMAP_AUDIO_LEVEL);
-		participant->arc = rc;
-	}
-}
-
-void recorder_close(room_participant *participant) {
-	if(participant->arc) {
-		audio_recorder *rc = participant->arc;
-		participant->arc = NULL;
-		audio_recorder_close(rc);
-		JANUS_LOG(LOG_INFO, "Closed user's audio recording %s\n", rc->filename ? rc->filename : "??");
-		audio_recorder_destroy(rc);
-	}
-}
-
 void participant_destroy(room_participant *participant) {
 	if(!participant)
 		return;

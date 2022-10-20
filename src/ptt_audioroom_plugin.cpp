@@ -690,8 +690,7 @@ void incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *packet) {
 
 	char *buf = packet->buffer;
 	uint16_t len = packet->length;
-	/* Save the frame if we're recording this leg */
-	audio_recorder_save_frame(participant->arc, buf, len);
+
 	if(g_atomic_int_get(&participant->active)) {
 		participant->reset = FALSE;
 
@@ -954,10 +953,7 @@ static void hangup_media_internal(janus_plugin_session *handle) {
 		}
 		json_decref(participantInfo);
 	}
-	/* Get rid of the recorders, if available */
-	janus_mutex_lock(&participant->rec_mutex);
-	recorder_close(participant);
-	janus_mutex_unlock(&participant->rec_mutex);
+
 	/* Free the participant resources */
 	janus_mutex_lock(&participant->qmutex);
 	g_atomic_int_set(&participant->active, 0);

@@ -53,17 +53,12 @@ struct room_participant {
 	uint16_t probation; 		/* Used to determine new ssrc validity */
 	uint32_t last_timestamp;	/* Last in seq timestamp */
 	gboolean reset;				/* Whether or not the Opus context must be reset, without re-joining the room */
-	audio_recorder *arc;		/* The Janus recorder instance for this user's audio, if enabled */
-	janus_mutex rec_mutex;		/* Mutex to protect the recorder from race conditions */
 	gint destroyed;	/* Whether this room has been destroyed */
 
 	std::thread::id incoming_rtp_thread_id;
 };
 
 void clear_inbuf(room_participant *participant, bool lock_qmutex);
-
-void recorder_create(room_participant *participant);
-void recorder_close(room_participant *participant);
 
 void participant_destroy(room_participant *participant);
 void participant_unref(room_participant *participant);

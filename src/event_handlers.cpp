@@ -146,8 +146,6 @@ json_t* query_session(janus_plugin_session *handle) {
 		}
 		if(participant->last_drop > 0)
 			json_object_set_new(info, "last-drop", json_integer(participant->last_drop));
-		if(participant->arc && participant->arc->filename)
-			json_object_set_new(info, "audio-recording", json_string(participant->arc->filename));
 		if(participant->extmap_id > 0) {
 			json_object_set_new(info, "audio-level-dBov", json_integer(participant->dBov_level));
 			json_object_set_new(info, "talking", participant->talking ? json_true() : json_false());
@@ -1940,9 +1938,6 @@ void* message_handler_thread(void* data) {
 				participant->expected_seq = 0;
 				participant->probation = 0;
 				participant->last_timestamp = 0;
-				janus_mutex_init(&participant->qmutex);
-				participant->arc = NULL;
-				janus_mutex_init(&participant->rec_mutex);
 			}
 			participant->session = session;
 			participant->room = audiobridge;
@@ -2364,10 +2359,6 @@ void* message_handler_thread(void* data) {
 			json_decref(participantInfo);
 			janus_mutex_unlock(&old_audiobridge->mutex);
 
-			/* Stop recording, if we were (since this is a new room, a new recording would be required, so a new configure) */
-			janus_mutex_lock(&participant->rec_mutex);
-			recorder_close(participant);
-			janus_mutex_unlock(&participant->rec_mutex);
 			janus_refcount_decrease(&old_audiobridge->ref);
 			/* Done, join the new one */
 			g_free(participant->user_id_str);
@@ -2505,10 +2496,6 @@ void* message_handler_thread(void* data) {
 			clear_inbuf(participant, false);
 			janus_mutex_unlock(&participant->qmutex);
 
-			/* Stop recording, if we were */
-			janus_mutex_lock(&participant->rec_mutex);
-			recorder_close(participant);
-			janus_mutex_unlock(&participant->rec_mutex);
 			/* Also notify event handlers */
 			if(notify_events && gateway->events_is_enabled()) {
 				json_t *participantInfo = json_object();
@@ -2696,11 +2683,6 @@ void* message_handler_thread(void* data) {
 			if(extmap_id > -1 && participant->room && participant->room->audiolevel_ext) {
 				/* Add an extmap attribute too */
 				participant->extmap_id = extmap_id;
-				/* If there's a recording, add the extension there */
-				janus_mutex_lock(&participant->rec_mutex);
-				if(participant->arc != NULL)
-					audio_recorder_add_extmap(participant->arc, participant->extmap_id, JANUS_RTP_EXTMAP_AUDIO_LEVEL);
-				janus_mutex_unlock(&participant->rec_mutex);
 			}
 			/* Prepare the response */
 			char *new_sdp = janus_sdp_write(answer ? answer : offer);
