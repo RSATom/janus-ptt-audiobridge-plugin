@@ -13,9 +13,16 @@ struct janus_mutex_lock_guard {
 	}
 
 	~janus_mutex_lock_guard() {
-		janus_mutex_unlock(_mutex);
+		unlock();
+	}
+
+	void unlock() {
+		if(_mutex) {
+			janus_mutex_unlock(_mutex);
+			_mutex = nullptr;
+		}
 	}
 
 private:
-	janus_mutex *const _mutex;
+	janus_mutex* _mutex;
 };
