@@ -1080,6 +1080,8 @@ void *participants_sender_thread(void *data) {
 			rtp_relay_packet *pkt = (rtp_relay_packet *)(peek ? peek->data : NULL);
 			p->inbuf = g_list_delete_link(p->inbuf, peek);
 
+			inbuf_lock_guard.unlock();
+
 			if(pkt && !pkt->silence) {
 				/* Send packet to each participant (except self) */
 				ps = participants_list;
