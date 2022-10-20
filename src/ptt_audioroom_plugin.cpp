@@ -1062,6 +1062,12 @@ void *participants_sender_thread(void *data) {
 		GList *ps = participants_list;
 		while(ps) {
 			room_participant *p = (room_participant *)ps->data;
+			if(p != audiobridge->unmutedParticipant) {
+				assert(!p->inbuf);
+				if(p->inbuf)
+					JANUS_LOG(LOG_ERR, "Muted participant has queued packets.\n");
+			}
+
 			janus_refcount_increase(&p->ref);
 			ps = ps->next;
 		}
