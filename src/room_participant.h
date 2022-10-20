@@ -58,6 +58,14 @@ struct room_participant {
 	std::thread::id incoming_rtp_thread_id;
 };
 
+// ptt_room::mutex should be locked
+void mute_participant(
+	plugin_session *session,
+	room_participant *participant,
+	gboolean mute,
+	gboolean self_notify,
+	gboolean lock_qmutex);
+
 void clear_inbuf(room_participant *participant, bool lock_qmutex);
 
 void participant_destroy(room_participant *participant);
