@@ -215,21 +215,7 @@ static void mute_participant(
 	if(participant->muted) {
 		audiobridge->unmutedParticipant = NULL;
 		/* Clear the queued packets waiting to be handled */
-		if(lock_qmutex) janus_mutex_lock(&participant->qmutex);
-		while(participant->inbuf) {
-			GList *first = g_list_first(participant->inbuf);
-			rtp_relay_packet *pkt = (rtp_relay_packet *)first->data;
-			participant->inbuf = g_list_delete_link(participant->inbuf, first);
-			first = NULL;
-			if(pkt == NULL)
-				continue;
-			if(pkt->data)
-				g_free(pkt->data);
-			pkt->data = NULL;
-			g_free(pkt);
-			pkt = NULL;
-		}
-		if(lock_qmutex) janus_mutex_unlock(&participant->qmutex);
+		clear_inbuf(participant, lock_qmutex);
 	} else {
 		gint64 now = janus_get_monotonic_time();
 		audiobridge->unmutedParticipant = participant;
@@ -759,18 +745,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 				/* Get rid of queued packets */
 				janus_mutex_lock(&p->qmutex);
 				g_atomic_int_set(&p->active, 0);
-				while(p->inbuf) {
-					GList *first = g_list_first(p->inbuf);
-					rtp_relay_packet *pkt = (rtp_relay_packet *)first->data;
-					p->inbuf = g_list_delete_link(p->inbuf, first);
-					first = NULL;
-					if(pkt == NULL)
-						continue;
-					g_free(pkt->data);
-					pkt->data = NULL;
-					g_free(pkt);
-					pkt = NULL;
-				}
+				clear_inbuf(p, false);
 				janus_mutex_unlock(&p->qmutex);
 				/* Request a WebRTC hangup */
 				gateway->close_pc(p->session->handle);
@@ -2525,23 +2500,14 @@ void* message_handler_thread(void* data) {
 				removed = g_hash_table_remove(audiobridge->participants, (gpointer)participant->user_id_str);
 				participant->room = NULL;
 			}
+
 			/* Get rid of queued packets */
 			janus_mutex_lock(&participant->qmutex);
 			g_atomic_int_set(&participant->active, 0);
 			participant->prebuffering = TRUE;
-			while(participant->inbuf) {
-				GList *first = g_list_first(participant->inbuf);
-				rtp_relay_packet *pkt = (rtp_relay_packet *)first->data;
-				participant->inbuf = g_list_delete_link(participant->inbuf, first);
-				first = NULL;
-				if(pkt == NULL)
-					continue;
-				g_free(pkt->data);
-				pkt->data = NULL;
-				g_free(pkt);
-				pkt = NULL;
-			}
+			clear_inbuf(participant, false);
 			janus_mutex_unlock(&participant->qmutex);
+
 			/* Stop recording, if we were */
 			janus_mutex_lock(&participant->rec_mutex);
 			recorder_close(participant);

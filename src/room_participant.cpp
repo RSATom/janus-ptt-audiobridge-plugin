@@ -11,6 +11,19 @@ extern "C" {
 namespace ptt_audioroom
 {
 
+void clear_inbuf(room_participant* participant, bool lock_qmutex)
+{
+	if(lock_qmutex) janus_mutex_lock(&participant->qmutex);
+	for(GList* first = participant->inbuf; first; first = g_list_delete_link(first, first)) {
+		if(rtp_relay_packet* pkt = (rtp_relay_packet *)first->data) {
+			g_free(pkt->data);
+			g_free(pkt);
+		}
+	}
+	participant->inbuf = nullptr;
+	if(lock_qmutex) janus_mutex_unlock(&participant->qmutex);
+}
+
 void recorder_create(room_participant *participant) {
 	if(participant == NULL || participant->room == NULL)
 		return;

@@ -962,18 +962,7 @@ static void hangup_media_internal(janus_plugin_session *handle) {
 	participant->audio_dBov_sum = 0;
 	participant->talking = FALSE;
 	/* Get rid of queued packets */
-	while(participant->inbuf) {
-		GList *first = g_list_first(participant->inbuf);
-		rtp_relay_packet *pkt = (rtp_relay_packet *)first->data;
-		participant->inbuf = g_list_delete_link(participant->inbuf, first);
-		first = NULL;
-		if(pkt == NULL)
-			continue;
-		g_free(pkt->data);
-		pkt->data = NULL;
-		g_free(pkt);
-		pkt = NULL;
-	}
+	clear_inbuf(participant, false);
 	participant->last_drop = 0;
 	janus_mutex_unlock(&participant->qmutex);
 	if(audiobridge != NULL) {

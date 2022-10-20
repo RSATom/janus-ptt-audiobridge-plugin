@@ -60,6 +60,8 @@ struct room_participant {
 	std::thread::id incoming_rtp_thread_id;
 };
 
+void clear_inbuf(room_participant *participant, bool lock_qmutex);
+
 void recorder_create(room_participant *participant);
 void recorder_close(room_participant *participant);
 
