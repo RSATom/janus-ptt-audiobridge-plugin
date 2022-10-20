@@ -103,9 +103,6 @@ static struct janus_json_parameter rtp_forward_parameters[] = {
 static struct janus_json_parameter stop_rtp_forward_parameters[] = {
 	{"stream_id", JSON_INTEGER, JANUS_JSON_PARAM_REQUIRED | JANUS_JSON_PARAM_POSITIVE}
 };
-static struct janus_json_parameter checkstop_file_parameters[] = {
-	{"file_id", JSON_STRING, JANUS_JSON_PARAM_REQUIRED}
-};
 
 namespace ptt_audioroom
 {
