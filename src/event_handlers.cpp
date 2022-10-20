@@ -450,7 +450,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 		char tname[16];
 		g_snprintf(tname, sizeof(tname), "sender %s", audiobridge->room_id_str);
 		janus_refcount_increase(&audiobridge->ref);
-		audiobridge->thread = g_thread_try_new(tname, &participants_sender_thread, audiobridge, &error);
+		audiobridge->thread = g_thread_try_new(tname, &room_sender_thread, audiobridge, &error);
 		if(error != NULL) {
 			JANUS_LOG(LOG_ERR, "Got error %d (%s) trying to launch the sender thread...\n",
 				error->code, error->message ? error->message : "??");

@@ -43,6 +43,8 @@ struct ptt_room {
 	int rtp_udp_sock;			/* UDP socket to use to forward RTP packets */
 };
 
+void* room_sender_thread(void* data);
+
 int create_udp_socket_if_needed(ptt_room *audiobridge);
 
 void ptt_room_destroy(ptt_room *audiobridge);

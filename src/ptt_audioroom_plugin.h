@@ -35,6 +35,4 @@ extern janus_mutex rooms_mutex;
 extern char* admin_key;
 extern gboolean lock_rtpfwd;
 
-void* participants_sender_thread(void* data);
-
 }
