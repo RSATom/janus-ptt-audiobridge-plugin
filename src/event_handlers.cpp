@@ -204,7 +204,7 @@ static void mute_participant(
 
 	ptt_room *audiobridge = participant->room;
 
-	JANUS_LOG(LOG_VERB, "Setting muted property: %s (room %s, user %s)\n",
+	JANUS_LOG(LOG_INFO, "Setting muted property: %s (room %s, user %s)\n",
 		mute ? "true" : "false", participant->room->room_id_str, participant->user_id_str);
 	participant->muted = mute;
 	if(participant->muted) {
