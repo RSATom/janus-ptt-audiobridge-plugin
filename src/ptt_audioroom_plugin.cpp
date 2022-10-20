@@ -795,7 +795,11 @@ void incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *packet) {
 		}
 		/* Check sequence number received, verify if it's relevant to the expected one */
 		if(pkt->seq_number == participant->expected_seq) {
+#if GLIB_CHECK_VERSION(2, 68, 0)
 			pkt->data = (janus_rtp_header*) g_memdup2(packet->buffer, packet->length);
+#else
+			pkt->data = (janus_rtp_header*) g_memdup(packet->buffer, packet->length);
+#endif
 			pkt->length = packet->length;
 			/* Update last_timestamp */
 			participant->last_timestamp = pkt->timestamp;
@@ -807,7 +811,11 @@ void incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *packet) {
 			JANUS_LOG(LOG_HUGE, "%" SCNu16 " sequence(s) lost, sequence = %" SCNu16 ", expected seq = %" SCNu16 "\n",
 				gap, pkt->seq_number, participant->expected_seq);
 
+#if GLIB_CHECK_VERSION(2, 68, 0)
 			pkt->data = (janus_rtp_header*) g_memdup2(packet->buffer, packet->length);
+#else
+			pkt->data = (janus_rtp_header*) g_memdup(packet->buffer, packet->length);
+#endif
 			pkt->length = packet->length;
 			/* Increment according to previous seq_number */
 			participant->expected_seq = pkt->seq_number + 1;
