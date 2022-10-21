@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <thread>
 
 #include <glib.h>
@@ -29,6 +30,7 @@ struct room_participant {
 	ptt_room *room;	/* Room */
 	gboolean muted;			/* Whether this participant is muted */
 	gint64 unmuted_timestamp;
+	std::string recording_id;
 
 	gchar *user_id_str;		/* Unique ID in the room (when using strings) */
 	gchar *display;			/* Display name (opaque value, only meaningful to application) */

@@ -2129,12 +2129,15 @@ void* message_handler_thread(void* data) {
 
 			mute_participant(session, participant, muting, FALSE, TRUE);
 
-			janus_mutex_unlock(&audiobridge->mutex);
-			janus_mutex_unlock(&rooms_mutex);
-
 			event = json_object();
 			json_object_set_new(event, "audiobridge", json_string("event"));
 			json_object_set_new(event, "result", json_string("ok"));
+			if(audiobridge->mjrs && !muting) {
+				json_object_set_new(event, "recording_id", json_string(participant->recording_id.c_str()));
+			}
+
+			janus_mutex_unlock(&audiobridge->mutex);
+			janus_mutex_unlock(&rooms_mutex);
 		} else if(!strcasecmp(request_text, "changeroom")) {
 			/* The participant wants to leave the current room and join another one without reconnecting (e.g., a sidebar) */
 			JANUS_VALIDATE_JSON_OBJECT(root, join_parameters,

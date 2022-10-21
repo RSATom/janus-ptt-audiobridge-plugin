@@ -10,10 +10,28 @@ extern "C" {
 #include "ptt_audioroom_plugin.h"
 #include "ptt_room.h"
 #include "rtp_relay_packet.h"
+#include "glib_ptr.h"
 
 
 namespace ptt_audioroom
 {
+
+// ptt_room::mutex should be locked
+std::string generate_recording_id(room_participant* participant) {
+	const ptt_room* room = participant->room;
+	const gint64 now = janus_get_real_time();
+
+	gchar_ptr escaped_room_id_ptr(g_uri_escape_string(room->room_id_str, nullptr, false));
+	gchar_ptr escaped_participant_id_ptr(g_uri_escape_string(participant->user_id_str, nullptr, false));
+	gchar_ptr uuid_ptr(janus_random_uuid());
+
+	std::string recording_id;
+	recording_id += std::string(room->room_id_str) + G_DIR_SEPARATOR_S;
+	recording_id += std::string(participant->user_id_str) + G_DIR_SEPARATOR_S;
+	recording_id += std::to_string(now) + "-" +uuid_ptr.get() + "-audio";
+
+	return recording_id;
+}
 
 // ptt_room::mutex should be locked
 void mute_participant(
@@ -33,9 +51,14 @@ void mute_participant(
 	participant->muted = mute;
 	if(participant->muted) {
 		audiobridge->unmutedParticipant = NULL;
+
+		participant->recording_id.clear();
+
 		/* Clear the queued packets waiting to be handled */
 		clear_inbuf(participant, lock_qmutex);
 	} else {
+		participant->recording_id = generate_recording_id(participant);
+
 		gint64 now = janus_get_monotonic_time();
 		audiobridge->unmutedParticipant = participant;
 		participant->unmuted_timestamp = now;
