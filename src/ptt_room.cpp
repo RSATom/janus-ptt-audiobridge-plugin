@@ -65,6 +65,9 @@ void* room_sender_thread(void* data) {
 	/* SRTP buffer, if needed */
 	char sbuf[1500];
 
+	room_participant* unmuted_participant = nullptr;
+	std::unique_ptr<audio_recorder> recorder_ptr;
+
 	/* Loop */
 	int i=0;
 	int count = 0, rf_count = 0, prev_count = 0;
@@ -124,7 +127,35 @@ void* room_sender_thread(void* data) {
 			ps = ps->next;
 		}
 
-		room_participant* unmuted_participant = audiobridge->unmuted_participant;
+		room_participant* current_unmuted_participant = audiobridge->unmuted_participant;
+
+		if(unmuted_participant != current_unmuted_participant) {
+			recorder_ptr.reset();
+
+			unmuted_participant = current_unmuted_participant;
+
+			if(audiobridge->mjrs && audiobridge->mjrs_dir &&
+				unmuted_participant && !unmuted_participant->recording_id.empty())
+			{
+				std::string recording_path = audiobridge->mjrs_dir;
+				if(recording_path.back() != G_DIR_SEPARATOR) {
+					recording_path += G_DIR_SEPARATOR_S;
+				}
+				recording_path += unmuted_participant->recording_id;
+				recording_path += ".mjr";
+
+				recorder_ptr = std::make_unique<audio_recorder>(recording_path, janus_audiocodec_name(JANUS_AUDIOCODEC_OPUS));
+
+				if(unmuted_participant->extmap_id > 0) {
+					recorder_ptr->add_extmap(unmuted_participant->extmap_id, JANUS_RTP_EXTMAP_AUDIO_LEVEL);
+				}
+
+				if(!recorder_ptr->open()) {
+					recorder_ptr.reset();
+				}
+			}
+		}
+
 		janus_mutex_unlock_nodebug(&audiobridge->mutex);
 
 		if(unmuted_participant) {
@@ -139,6 +170,8 @@ void* room_sender_thread(void* data) {
 			p->inbuf = g_list_delete_link(p->inbuf, peek);
 
 			inbuf_lock_guard.unlock();
+
+			if(recorder_ptr) recorder_ptr->save_frame(pkt->data, pkt->length);
 
 			if(pkt && !pkt->silence) {
 				/* Send packet to each participant (except self) */
