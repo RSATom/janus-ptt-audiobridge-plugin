@@ -24,15 +24,18 @@ struct ptt_room;
 struct room_participant {
 	janus_refcount ref;			/* Reference counter for this participant */
 	plugin_session *session;
+
+	// changing only when ptt_room::mutex is locked
 	ptt_room *room;	/* Room */
+	gboolean muted;			/* Whether this participant is muted */
+	gint64 unmuted_timestamp;
+
 	gchar *user_id_str;		/* Unique ID in the room (when using strings) */
 	gchar *display;			/* Display name (opaque value, only meaningful to application) */
 	gboolean admin;			/* If the participant is an admin (can't be globally muted) */
 	gboolean prebuffering;	/* Whether this participant needs pre-buffering of a few packets (just joined) */
 	uint prebuffer_count;	/* Number of packets to buffer before decoding this participant */
 	volatile gint active;	/* Whether this participant can receive media at all */
-	gboolean muted;			/* Whether this participant is muted */
-	gint64 unmuted_timestamp;
 	/* RTP stuff */
 	GList *inbuf;			/* Incoming audio from this participant, as an ordered list of packets */
 	gint64 last_drop;		/* When we last dropped a packet because the imcoming queue was full */
