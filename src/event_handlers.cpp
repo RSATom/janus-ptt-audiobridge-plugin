@@ -970,7 +970,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			goto prepare_response;
 		}
 
-		if(!muted && audiobridge->unmutedParticipant && audiobridge->unmutedParticipant != participant) {
+		if(!muted && audiobridge->unmuted_participant && audiobridge->unmuted_participant != participant) {
 			janus_mutex_unlock(&audiobridge->mutex);
 			janus_refcount_decrease(&audiobridge->ref);
 			JANUS_LOG(LOG_ERR, "Room \"%s\" already has unmuted user\n", room_id_str);
@@ -2087,35 +2087,35 @@ void* message_handler_thread(void* data) {
 			janus_mutex_lock(&audiobridge->mutex);
 
 			const gboolean muting = !strcasecmp(request_text, "self-mute");
-			if(!muting && audiobridge->unmutedParticipant && audiobridge->unmutedParticipant != participant) {
-				// check if unmutedParticipant was not active for too long time
+			if(!muting && audiobridge->unmuted_participant && audiobridge->unmuted_participant != participant) {
+				// check if unmuted_participant was not active for too long time
 				gboolean mute_forced = FALSE;
-				struct room_participant* unmutedParticipant = audiobridge->unmutedParticipant;
-				janus_mutex_lock(&unmutedParticipant->qmutex);
+				struct room_participant* unmuted_participant = audiobridge->unmuted_participant;
+				janus_mutex_lock(&unmuted_participant->qmutex);
 				gint64 now = janus_get_monotonic_time();
-				if(now - MAX(unmutedParticipant->inbuf_timestamp, unmutedParticipant->unmuted_timestamp) > PTT_NO_AUDIO_TIMEOUT*G_USEC_PER_SEC) {
+				if(now - MAX(unmuted_participant->inbuf_timestamp, unmuted_participant->unmuted_timestamp) > PTT_NO_AUDIO_TIMEOUT*G_USEC_PER_SEC) {
 					mute_forced = TRUE;
 					JANUS_LOG(LOG_WARN, "Room \"%s\" already has unmuted but inactive user. Forcing mute...\n", participant->room->room_id_str);
-					mute_participant(session, unmutedParticipant, TRUE, FALSE, FALSE);
+					mute_participant(session, unmuted_participant, TRUE, FALSE, FALSE);
 
 					// Notify participant about forced mute
 					json_t *participantInfo = json_object();
-					json_object_set_new(participantInfo, "id", json_string(unmutedParticipant->user_id_str));
-					if(unmutedParticipant->display)
-						json_object_set_new(participantInfo, "display", json_string(unmutedParticipant->display));
+					json_object_set_new(participantInfo, "id", json_string(unmuted_participant->user_id_str));
+					if(unmuted_participant->display)
+						json_object_set_new(participantInfo, "display", json_string(unmuted_participant->display));
 
 					json_t *pub = json_object();
 					json_object_set_new(pub, "audiobridge", json_string("forcibly-muted"));
-					json_object_set_new(pub, "room", json_string(unmutedParticipant->room->room_id_str));
+					json_object_set_new(pub, "room", json_string(unmuted_participant->room->room_id_str));
 					json_object_set_new(pub, "participant", participantInfo);
 
 					JANUS_LOG(LOG_VERB, "Notifying participant %s (%s)\n",
-						unmutedParticipant->user_id_str, unmutedParticipant->display ? unmutedParticipant->display : "??");
-					int ret = gateway->push_event(unmutedParticipant->session->handle, &ptt_audioroom_plugin, NULL, pub, NULL);
+						unmuted_participant->user_id_str, unmuted_participant->display ? unmuted_participant->display : "??");
+					int ret = gateway->push_event(unmuted_participant->session->handle, &ptt_audioroom_plugin, NULL, pub, NULL);
 					JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
 					json_decref(pub);
 				}
-				janus_mutex_unlock(&unmutedParticipant->qmutex);
+				janus_mutex_unlock(&unmuted_participant->qmutex);
 
 				if(!mute_forced) {
 					JANUS_LOG(LOG_INFO, "Room \"%s\" already has unmuted user\n", participant->room->room_id_str);
@@ -2254,8 +2254,8 @@ void* message_handler_thread(void* data) {
 			/* Leave the old room first... */
 			janus_refcount_increase(&participant->ref);
 			janus_mutex_lock(&old_audiobridge->mutex);
-			if(old_audiobridge->unmutedParticipant == participant) {
-				old_audiobridge->unmutedParticipant = NULL;
+			if(old_audiobridge->unmuted_participant == participant) {
+				old_audiobridge->unmuted_participant = nullptr;
 			}
 			g_hash_table_remove(old_audiobridge->participants, (gpointer)participant->user_id_str);
 
@@ -2421,8 +2421,8 @@ void* message_handler_thread(void* data) {
 				json_decref(participantInfo);
 
 				/* Actually leave the room... */
-				if(audiobridge->unmutedParticipant == participant) {
-					audiobridge->unmutedParticipant = NULL;
+				if(audiobridge->unmuted_participant == participant) {
+					audiobridge->unmuted_participant = nullptr;
 				}
 				removed = g_hash_table_remove(audiobridge->participants, (gpointer)participant->user_id_str);
 				participant->room = NULL;

@@ -50,7 +50,7 @@ void mute_participant(
 		mute ? "true" : "false", participant->room->room_id_str, participant->user_id_str);
 	participant->muted = mute;
 	if(participant->muted) {
-		audiobridge->unmutedParticipant = NULL;
+		audiobridge->unmuted_participant = nullptr;
 
 		participant->recording_id.clear();
 
@@ -60,7 +60,7 @@ void mute_participant(
 		participant->recording_id = generate_recording_id(participant);
 
 		gint64 now = janus_get_monotonic_time();
-		audiobridge->unmutedParticipant = participant;
+		audiobridge->unmuted_participant = participant;
 		participant->unmuted_timestamp = now;
 	}
 

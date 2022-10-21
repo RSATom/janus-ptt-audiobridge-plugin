@@ -31,7 +31,7 @@ struct ptt_room {
 	gchar *mjrs_dir;			/* Folder to save the mjrs file to */
 	gboolean destroy;			/* Value to flag the room for destruction */
 	GHashTable *participants;	/* Map of participants */
-	struct room_participant* unmutedParticipant;
+	struct room_participant* unmuted_participant;
 	gboolean check_tokens;		/* Whether to check tokens when participants join (see below) */
 	GHashTable *allowed;		/* Map of participants (as tokens) allowed to join */
 	GThread *thread;			/* Mixer thread for this room */

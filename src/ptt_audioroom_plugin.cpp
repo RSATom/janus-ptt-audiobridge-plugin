@@ -923,8 +923,8 @@ static void hangup_media_internal(janus_plugin_session *handle) {
 		json_object_set_new(event, "room", json_string(audiobridge->room_id_str));
 		json_object_set(event, "participant", participantInfo);
 
-		if(audiobridge->unmutedParticipant == participant) {
-			audiobridge->unmutedParticipant = NULL;
+		if(audiobridge->unmuted_participant == participant) {
+			audiobridge->unmuted_participant = nullptr;
 		}
 		removed = g_hash_table_remove(audiobridge->participants, (gpointer)participant->user_id_str);
 

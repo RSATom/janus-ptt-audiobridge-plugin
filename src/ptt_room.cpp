@@ -114,7 +114,7 @@ void* room_sender_thread(void* data) {
 		GList *ps = participants_list;
 		while(ps) {
 			room_participant *p = (room_participant *)ps->data;
-			if(p != audiobridge->unmutedParticipant) {
+			if(p != audiobridge->unmuted_participant) {
 				assert(!p->inbuf);
 				if(p->inbuf)
 					JANUS_LOG(LOG_ERR, "Muted participant has queued packets.\n");
@@ -124,11 +124,11 @@ void* room_sender_thread(void* data) {
 			ps = ps->next;
 		}
 
-		room_participant* unmutedParticipant = audiobridge->unmutedParticipant;
+		room_participant* unmuted_participant = audiobridge->unmuted_participant;
 		janus_mutex_unlock_nodebug(&audiobridge->mutex);
 
-		if(unmutedParticipant) {
-			room_participant *p = unmutedParticipant;
+		if(unmuted_participant) {
+			room_participant *p = unmuted_participant;
 			janus_mutex_lock_guard inbuf_lock_guard(&p->qmutex);
 			if(g_atomic_int_get(&p->destroyed) || !p->session || !g_atomic_int_get(&p->session->started) || !g_atomic_int_get(&p->active) || p->prebuffering || !p->inbuf) {
 				continue;
@@ -145,7 +145,7 @@ void* room_sender_thread(void* data) {
 				ps = participants_list;
 				while(ps) {
 					room_participant *p = (room_participant *)ps->data;
-					if(g_atomic_int_get(&p->destroyed) || !p->session || !g_atomic_int_get(&p->session->started) || p == unmutedParticipant) {
+					if(g_atomic_int_get(&p->destroyed) || !p->session || !g_atomic_int_get(&p->session->started) || p == unmuted_participant) {
 						ps = ps->next;
 						continue;
 					}
