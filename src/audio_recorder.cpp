@@ -10,6 +10,7 @@
 #include <libgen.h>
 
 #include <glib.h>
+#include <glib/gstdio.h>
 #include <jansson.h>
 
 #include "audio_recorder.h"
@@ -19,381 +20,319 @@ extern "C" {
 #include "janus/utils.h"
 }
 
-namespace ptt_audioroom
+#include "c_ptr.h"
+#include "glib_ptr.h"
+#include "json_ptr.h"
+
+
+namespace {
+
+const char header[] = "MJR00002";
+const char frame_header[] = "MEET";
+const char eos_header[] = "----";
+
+struct rtp_header_restorer
 {
+	rtp_header_restorer(janus_rtp_header* header) :
+		_header(header),
+		_ssrc(header->ssrc),
+		_seq_number(header->seq_number),
+		_timestamp(header->timestamp) {}
 
-/* Info header in the structured recording */
-static const char *header = "MJR00002";
-/* Frame header in the structured recording */
-static const char *frame_header = "MEET";
-static const char *eos_header = "----";
+	~rtp_header_restorer() {
+		_header->ssrc = _ssrc;
+		_header->seq_number = _seq_number;
+		_header->timestamp = _timestamp;
+	}
 
-static void audio_recorder_free(const janus_refcount *recorder_ref) {
-	audio_recorder *recorder = janus_refcount_containerof(recorder_ref, audio_recorder, ref);
-	/* This recorder can be destroyed, free all the resources */
-	audio_recorder_close(recorder);
-	g_free(recorder->dir);
-	recorder->dir = NULL;
-	g_free(recorder->filename);
-	recorder->filename = NULL;
-	if(recorder->file != NULL)
-		fclose(recorder->file);
-	recorder->file = NULL;
-	g_free(recorder->codec);
-	recorder->codec = NULL;
-	if(recorder->extensions != NULL)
-		g_hash_table_destroy(recorder->extensions);
-	g_free(recorder);
+private:
+	janus_rtp_header *const _header;
+	const uint32_t _ssrc;
+	const uint16_t _seq_number;
+	const uint32_t _timestamp;
+};
+
 }
 
-audio_recorder *audio_recorder_create(const char *dir, const char *codec, const char *filename) {
-	if(codec == NULL) {
+namespace ptt_audioroom {
+
+audio_recorder::audio_recorder(
+	const std::string& recording_path,
+	const std::string& codec) :
+	_created_at(janus_get_real_time()),
+	_recording_path(recording_path),
+	_codec(codec)
+{
+	janus_rtp_switching_context_reset(&_rtp_context);
+}
+
+audio_recorder::~audio_recorder()
+{
+	close();
+}
+
+bool audio_recorder::open()
+{
+	if(_file) {
+		JANUS_LOG(LOG_ERR, "Trying open audio_recorder second time\n");
+		return false;
+	}
+
+	if(_recording_path.empty()) {
+		JANUS_LOG(LOG_ERR, "Missing recordign path\n");
+		return false;
+	}
+
+	if(_codec.empty()) {
 		JANUS_LOG(LOG_ERR, "Missing codec information\n");
-		return NULL;
+		return false;
 	}
-	if(0 != strcasecmp(codec, "opus") && 0 != strcasecmp(codec, "multiopus")) {
-		/* We don't recognize the codec: while we might go on anyway, we'd rather fail instead */
-		JANUS_LOG(LOG_ERR, "Unsupported codec '%s'\n", codec);
-		return NULL;
+
+	if(strcasecmp(_codec.c_str(), "opus") != 0 && strcasecmp(_codec.c_str(), "multiopus") != 0) {
+		JANUS_LOG(LOG_ERR, "Unsupported codec '%s'\n", _codec.c_str());
+		return false;
 	}
-	/* Create the recorder */
-	audio_recorder *rc = (audio_recorder *)g_malloc0(sizeof(audio_recorder));
-	janus_refcount_init(&rc->ref, audio_recorder_free);
-	janus_rtp_switching_context_reset(&rc->context);
-	rc->dir = NULL;
-	rc->filename = NULL;
-	rc->file = NULL;
-	rc->codec = g_strdup(codec);
-	rc->created = janus_get_real_time();
-	const char *rec_dir = NULL;
-	const char *rec_file = NULL;
-	char *copy_for_parent = NULL;
-	char *copy_for_base = NULL;
-	/* Check dir and filename values */
-	if(filename != NULL) {
-		/* Helper copies to avoid overwriting */
-		copy_for_parent = g_strdup(filename);
-		copy_for_base = g_strdup(filename);
-		/* Get filename parent folder */
-		const char *filename_parent = dirname(copy_for_parent);
-		/* Get filename base file */
-		const char *filename_base = basename(copy_for_base);
-		if(!dir) {
-			/* If dir is NULL we have to create filename_parent and filename_base */
-			rec_dir = filename_parent;
-			rec_file = filename_base;
-		} else {
-			/* If dir is valid we have to create dir and filename*/
-			rec_dir = dir;
-			rec_file = filename;
-			if(strcasecmp(filename_parent, ".") || strcasecmp(filename_base, filename)) {
-				JANUS_LOG(LOG_WARN, "Unsupported combination of dir and filename %s %s\n", dir, filename);
-			}
+
+	gchar_ptr recording_dir_ptr(g_path_get_dirname(_recording_path.c_str()));
+	const gchar* recording_dir = recording_dir_ptr.get();
+	if(g_strcmp0(recording_dir, ".") != 0) {
+		if(g_mkdir_with_parents(recording_dir, 0700) < 0) {
+			JANUS_LOG(LOG_ERR, "Failed to create dir \"%s\" for recording\n", recording_dir);
+			return false;
 		}
 	}
-	if(rec_dir != NULL) {
-		/* Check if this directory exists, and create it if needed */
-		struct stat s;
-		int err = stat(rec_dir, &s);
-		if(err == -1) {
-			if(ENOENT == errno) {
-				/* Directory does not exist, try creating it */
-				if(janus_mkdir(rec_dir, 0755) < 0) {
-					JANUS_LOG(LOG_ERR, "mkdir (%s) error: %d (%s)\n", rec_dir, errno, g_strerror(errno));
-					audio_recorder_destroy(rc);
-					g_free(copy_for_parent);
-					g_free(copy_for_base);
-					return NULL;
-				}
-			} else {
-				JANUS_LOG(LOG_ERR, "stat (%s) error: %d (%s)\n", rec_dir, errno, g_strerror(errno));
-				audio_recorder_destroy(rc);
-				g_free(copy_for_parent);
-				g_free(copy_for_base);
-				return NULL;
-			}
-		} else {
-			if(S_ISDIR(s.st_mode)) {
-				/* Directory exists */
-				JANUS_LOG(LOG_VERB, "Directory exists: %s\n", rec_dir);
-			} else {
-				/* File exists but it's not a directory? */
-				JANUS_LOG(LOG_ERR, "Not a directory? %s\n", rec_dir);
-				audio_recorder_destroy(rc);
-				g_free(copy_for_parent);
-				g_free(copy_for_base);
-				return NULL;
-			}
-		}
+
+	if(g_unlink(_recording_path.c_str()) != 0 && errno != ENOENT) {
+		JANUS_LOG(LOG_ERR, "Failed to delete file \"%s\" %s\n", _recording_path.c_str(), g_strerror(errno));
+		return false;
 	}
-	char newname[1024];
-	memset(newname, 0, 1024);
-	if(rec_file == NULL) {
-		/* Choose a random username */
-		g_snprintf(newname, 1024, "janus-recording-%" SCNu32 ".mjr", janus_random_uint32());
-	} else {
-		/* Just append the extension */
-		g_snprintf(newname, 1024, "%s.mjr", rec_file);
+
+	_file = fopen(_recording_path.c_str(), "ab");
+	if(!_file) {
+		JANUS_LOG(LOG_ERR, "Failed to open file \"%s\" for recording\n", _recording_path.c_str());
+		return false;
 	}
-	/* Try opening the file now */
-	if(rec_dir == NULL) {
-		/* Make sure folder to save to is not protected */
-		if(janus_is_folder_protected(newname)) {
-			JANUS_LOG(LOG_ERR, "Target recording path '%s' is in protected folder...\n", newname);
-			audio_recorder_destroy(rc);
-			g_free(copy_for_parent);
-			g_free(copy_for_base);
-			return NULL;
-		}
-		rc->file = fopen(newname, "ab");
-	} else {
-		char path[1024];
-		memset(path, 0, 1024);
-		g_snprintf(path, 1024, "%s/%s", rec_dir, newname);
-		/* Make sure folder to save to is not protected */
-		if(janus_is_folder_protected(path)) {
-			JANUS_LOG(LOG_ERR, "Target recording path '%s' is in protected folder...\n", path);
-			audio_recorder_destroy(rc);
-			g_free(copy_for_parent);
-			g_free(copy_for_base);
-			return NULL;
-		}
-		rc->file = fopen(path, "ab");
+
+	if(fwrite(header, sizeof(header) - 1, 1, _file) != 1) {
+		_write_failed = true;
+		JANUS_LOG(LOG_ERR, "Failed to write .mjr header (%s)\n", g_strerror(errno));
+		return false;
 	}
-	if(rc->file == NULL) {
-		JANUS_LOG(LOG_ERR, "fopen error: %d\n", errno);
-		audio_recorder_destroy(rc);
-		g_free(copy_for_parent);
-		g_free(copy_for_base);
-		return NULL;
-	}
-	if(rec_dir)
-		rc->dir = g_strdup(rec_dir);
-	rc->filename = g_strdup(newname);
-	/* Write the first part of the header */
-	size_t res = fwrite(header, sizeof(char), strlen(header), rc->file);
-	if(res != strlen(header)) {
-		JANUS_LOG(LOG_ERR, "Couldn't write .mjr header (%zu != %zu, %s)\n",
-			res, strlen(header), g_strerror(errno));
-		audio_recorder_destroy(rc);
-		g_free(copy_for_parent);
-		g_free(copy_for_base);
-		return NULL;
-	}
-	rc->writable = 1;
-	/* We still need to also write the info header first */
-	rc->header = 0;
-	/* Done */
-	rc->destroyed = 0;
-	g_free(copy_for_parent);
-	g_free(copy_for_base);
-	return rc;
+
+	return true;
 }
 
-int audio_recorder_add_extmap(audio_recorder *recorder, int id, const char *extmap) {
-	if(!recorder || recorder->header || id < 1 || id > 15 || extmap == NULL )
-		return -1;
-	if(recorder->extensions == NULL)
-		recorder->extensions = g_hash_table_new_full(NULL, NULL, NULL, (GDestroyNotify)g_free);
-	g_hash_table_insert(recorder->extensions, GINT_TO_POINTER(id), g_strdup(extmap));
-	return 0;
-}
-
-int audio_recorder_opusred(audio_recorder *recorder, int red_pt) {
-	if(!recorder)
-		return -1;
-	if(!recorder->header) {
-		recorder->opusred_pt = red_pt;
-		return 0;
+bool audio_recorder::add_extmap(int id, const std::string& extmap)
+{
+	if(_header_saved || id < 1 || id > 15 || extmap.empty()) {
+		return false;
 	}
-	return -1;
+
+	_extensions[id] = extmap;
+
+	return true;
 }
 
-int audio_recorder_save_header(audio_recorder *recorder) {
-	/* Write info header as a JSON formatted info */
-	json_t *info = json_object();
-	/* FIXME Codecs should be configurable in the future */
-	const char *type = "a";
-	json_object_set_new(info, "t", json_string(type));								/* Audio/Video/Data */
-	json_object_set_new(info, "c", json_string(recorder->codec));					/* Media codec */
-	if(recorder->extensions) {
+bool audio_recorder::save_header()
+{
+	if(_header_saved) {
+		return false;
+	}
+
+	if(_write_failed) {
+		return false;
+	}
+
+	if(!_file) {
+		return false;
+	}
+
+	json_ptr info_ptr(json_object());
+	json_t* info = info_ptr.get();
+	json_object_set_new(info, "t", json_string("a")); // type = audio
+	json_object_set_new(info, "c", json_string(_codec.c_str()));
+	if(!_extensions.empty()) {
 		/* Add the extmaps to the JSON object */
-		json_t *extmaps = NULL;
-		GHashTableIter iter;
-		gpointer key, value;
-		g_hash_table_iter_init(&iter, recorder->extensions);
-		while(g_hash_table_iter_next(&iter, &key, &value)) {
-			int id = GPOINTER_TO_INT(key);
-			char *extmap = (char *)value;
-			if(id > 0 && id < 16 && extmap != NULL) {
-				if(extmaps == NULL)
+		json_t* extmaps = NULL;
+		for(const auto& id2extmap: _extensions) {
+			const int id = id2extmap.first;
+			const std::string& extmap = id2extmap.second;
+
+			if(id > 0 && id < 16 && !extmap.empty()) {
+				if(!extmaps)
 					extmaps = json_object();
-				char id_str[3];
-				g_snprintf(id_str, sizeof(id_str), "%d", id);
-				json_object_set_new(extmaps, id_str, json_string(extmap));
+
+				json_object_set_new(
+					extmaps,
+					std::to_string(id).c_str(),
+					json_string(extmap.c_str()));
 			}
 		}
 		if(extmaps != NULL)
 			json_object_set_new(info, "x", extmaps);
 	}
-	json_object_set_new(info, "s", json_integer(recorder->created));				/* Created time */
-	json_object_set_new(info, "u", json_integer(janus_get_real_time()));			/* First frame written time */
-	/* If this is audio and using RED, take note of the payload type */
-	if(recorder->opusred_pt > 0)
-		json_object_set_new(info, "or", json_integer(recorder->opusred_pt));
-	gchar *info_text = json_dumps(info, JSON_PRESERVE_ORDER);
-	json_decref(info);
-	if(info_text == NULL) {
+	json_object_set_new(info, "s", json_integer(_created_at)); /* Created time */
+	json_object_set_new(info, "u", json_integer(janus_get_real_time())); /* First frame written time */
+
+	char_ptr info_text_ptr(json_dumps(info, JSON_PRESERVE_ORDER));
+	const gchar* info_text = info_text_ptr.get();
+	if(!info_text) {
 		JANUS_LOG(LOG_ERR, "Error converting header to text...\n");
-		return -5;
-	}
-	uint16_t info_bytes = htons(strlen(info_text));
-	size_t res = fwrite(&info_bytes, sizeof(uint16_t), 1, recorder->file);
-	if(res != 1) {
-		recorder->write_failed = true;
-		JANUS_LOG(LOG_WARN, "Couldn't write size of JSON header in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
-			res, sizeof(uint16_t), g_strerror(errno));
-	}
-	res = fwrite(info_text, sizeof(char), strlen(info_text), recorder->file);
-	if(res != strlen(info_text)) {
-		recorder->write_failed = true;
-		JANUS_LOG(LOG_WARN, "Couldn't write JSON header in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
-			res, strlen(info_text), g_strerror(errno));
-	}
-	free(info_text);
 
-	return 0;
+		return false;
+	}
+
+	const uint16_t info_bytes = htons(strlen(info_text));
+	if(fwrite(&info_bytes, sizeof(uint16_t), 1, _file) != 1) {
+		JANUS_LOG(
+			LOG_WARN,
+			"Failed to write size of JSON header to .mjr file (%s)\n",
+			g_strerror(errno));
+
+		_write_failed = true;
+
+		return false;
+	}
+
+	const size_t info_text_len = strlen(info_text);
+	if(fwrite(info_text, info_text_len, 1, _file) != 1) {
+		JANUS_LOG(
+			LOG_WARN,
+			"Failed to write JSON header to .mjr file (%s)\n",
+			g_strerror(errno));
+
+		_write_failed = true;
+
+		return false;
+	}
+
+	_header_saved = true;
+	_started_at = janus_get_monotonic_time();
+
+	return true;
 }
 
-int audio_recorder_save_frame(audio_recorder *recorder, char *buffer, uint length) {
-	if(!recorder)
-		return -1;
-	if(!buffer || length < 1) {
-		return -2;
+bool audio_recorder::save_frame(void* frame, short frame_size)
+{
+	if(_write_failed) {
+		return false;
 	}
-	if(!recorder->file) {
-		return -3;
-	}
-	if(!recorder->writable) {
-		return -4;
-	}
-	gint64 now = janus_get_monotonic_time();
-	if(!recorder->header) {
-		const int header_save_result = audio_recorder_save_header(recorder);
-		if(header_save_result != 0)
-			return header_save_result;
 
-		recorder->header = 1;
-		recorder->started = now;
+	if(!_file) {
+		return false;
 	}
+
+	if(!frame || frame_size == 0) {
+		return false;
+	}
+
+	if(!_header_saved && !save_header()) {
+		return false;
+	}
+
+	const gint64 now = janus_get_monotonic_time();
+
 	/* Write frame header (fixed part[4], timestamp[4], length[2]) */
-	size_t res = fwrite(frame_header, sizeof(char), strlen(frame_header), recorder->file);
-	if(res != strlen(frame_header)) {
-		recorder->write_failed = true;
-		JANUS_LOG(LOG_WARN, "Couldn't write frame header in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
-			res, strlen(frame_header), g_strerror(errno));
+	if(fwrite(frame_header, sizeof(frame_header) - 1, 1, _file) != 1) {
+		JANUS_LOG(
+			LOG_WARN,
+			"Failed to write frame header to .mjr file (%s)\n",
+			g_strerror(errno));
+
+		_write_failed = true;
+
+		return false;
 	}
-	uint32_t timestamp = (uint32_t)(now > recorder->started ? ((now - recorder->started)/1000) : 0);
-	timestamp = htonl(timestamp);
-	res = fwrite(&timestamp, sizeof(uint32_t), 1, recorder->file);
-	if(res != 1) {
-		recorder->write_failed = true;
-		JANUS_LOG(LOG_WARN, "Couldn't write frame timestamp in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
-			res, sizeof(uint32_t), g_strerror(errno));
+
+	const uint32_t timestamp = htonl((now > (_started_at ? (now - _started_at) / 1000 : 0)));
+	if(fwrite(&timestamp, sizeof(timestamp), 1, _file) != 1) {
+		JANUS_LOG(
+			LOG_WARN,
+			"Failed to write frame timestamp to .mjr file (%s)\n",
+			g_strerror(errno));
+
+		_write_failed = true;
+
+		return false;
 	}
-	uint16_t header_bytes = htons(length);
-	res = fwrite(&header_bytes, sizeof(uint16_t), 1, recorder->file);
-	if(res != 1) {
-		recorder->write_failed = true;
-		JANUS_LOG(LOG_WARN, "Couldn't write size of frame in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
-			res, sizeof(uint16_t), g_strerror(errno));
+
+	const uint16_t header_bytes = htons(frame_size);
+	if(fwrite(&header_bytes, sizeof(header_bytes), 1, _file) != 1) {
+		JANUS_LOG(
+			LOG_WARN,
+			"Failed to write size of frame to .mjr file (%s)\n",
+			g_strerror(errno));
+
+		_write_failed = true;
+
+		return false;
 	}
+
 	/* Edit packet header if needed */
-	janus_rtp_header *header = (janus_rtp_header *)buffer;
-	uint32_t ssrc = 0;
-	uint16_t seq = 0;
-	ssrc = ntohl(header->ssrc);
-	seq = ntohs(header->seq_number);
-	timestamp = ntohl(header->timestamp);
-	janus_rtp_header_update(header, &recorder->context, false, 0);
+	janus_rtp_header* header = (janus_rtp_header*) frame;
+	rtp_header_restorer header_restore(header);
+
+	janus_rtp_header_update(header, &_rtp_context, false, 0);
+
 	/* Save packet on file */
-	int temp = 0, tot = length;
-	while(tot > 0) {
-		temp = fwrite(buffer+length-tot, sizeof(char), tot, recorder->file);
-		if(temp <= 0) {
-			recorder->write_failed = true;
-			JANUS_LOG(LOG_ERR, "Error saving frame...\n");
-			/* Restore packet header data */
-			header->ssrc = htonl(ssrc);
-			header->seq_number = htons(seq);
-			header->timestamp = htonl(timestamp);
-			return -6;
-		}
-		tot -= temp;
+	if(fwrite(frame, frame_size, 1, _file) != 1) {
+		JANUS_LOG(
+			LOG_WARN,
+			"Failed to write frame to .mjr file (%s)\n",
+			g_strerror(errno));
+
+		JANUS_LOG(LOG_ERR, "Error saving frame...\n");
+
+		_write_failed = true;
+
+		return false;
 	}
-	/* Restore packet header data */
-	header->ssrc = htonl(ssrc);
-	header->seq_number = htons(seq);
-	header->timestamp = htonl(timestamp);
-	fflush(recorder->file);
-	/* Done */
-	return 0;
+
+	fflush(_file);
+
+	return true;
 }
 
-static int audio_recorder_save_eos(audio_recorder *recorder) {
-	if(!recorder)
-		return -1;
-	if(!recorder->file) {
-		return -3;
-	}
-	if(!recorder->writable) {
-		return -4;
+bool audio_recorder::save_eos()
+{
+	if(!is_open()) {
+		return false;
 	}
 
-	gint64 now = janus_get_monotonic_time();
-	if(!recorder->header) {
-		const int header_save_result = audio_recorder_save_header(recorder);
-		if(header_save_result != 0)
-			return header_save_result;
-
-		recorder->header = TRUE;
-		recorder->started = now;
+	if(!_header_saved && !save_header()) {
+		return false;
 	}
 
-	if(!recorder->write_failed) {
-		size_t res = fwrite(frame_header, sizeof(char), strlen(frame_header), recorder->file);
-		if(res != strlen(frame_header)) {
-			JANUS_LOG(LOG_WARN, "Couldn't write EOS header in .mjr file (%zu != %zu, %s), expect issues post-processing\n",
-				res, strlen(frame_header), g_strerror(errno));
+	if(!_write_failed) {
+		if(fwrite(eos_header, sizeof(eos_header) - 1, 1, _file) != 1) {
+			JANUS_LOG(
+				LOG_WARN,
+				"Failed to write EOS header to .mjr file (%s)\n",
+				g_strerror(errno));
 		}
 
-		fflush(recorder->file);
+		fflush(_file);
 	}
 
-	/* Done */
-	return 0;
+	return true;
 }
 
-int audio_recorder_close(audio_recorder *recorder) {
-	if(!recorder || !recorder->writable)
-		return -1;
+void audio_recorder::close() {
+	if(_file) {
+		save_eos();
 
-	audio_recorder_save_eos(recorder);
+		size_t fsize = ftell(_file);
+		JANUS_LOG(LOG_INFO, "File is %zu bytes: %s\n", fsize, _recording_path.c_str());
 
-	recorder ->writable = FALSE;
-	if(recorder->file) {
-		fseek(recorder->file, 0L, SEEK_END);
-		size_t fsize = ftell(recorder->file);
-		JANUS_LOG(LOG_INFO, "File is %zu bytes: %s\n", fsize, recorder->filename);
+		fclose(_file);
+		_file = nullptr;
 	}
-	return 0;
-}
 
-void audio_recorder_destroy(audio_recorder *recorder) {
-	if(!recorder || recorder->destroyed)
-		return;
-	recorder->destroyed = TRUE;
-	janus_refcount_decrease(&recorder->ref);
+	_extensions.clear();
+	_header_saved = false;
+	_started_at = 0;
+	janus_rtp_switching_context_reset(&_rtp_context);
+	_write_failed = false;
 }
 
 }
