@@ -8,7 +8,7 @@ extern "C" {
 }
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
 /* Asynchronous API message to handle */

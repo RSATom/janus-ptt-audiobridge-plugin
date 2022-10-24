@@ -54,7 +54,7 @@ private:
 
 }
 
-namespace ptt_audioroom {
+namespace ptt_audiobridge {
 
 audio_recorder::audio_recorder(
 	const std::string& recording_path,

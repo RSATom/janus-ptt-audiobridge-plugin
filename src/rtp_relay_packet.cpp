@@ -1,7 +1,7 @@
 #include "rtp_relay_packet.h"
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
 /* Helper to sort incoming RTP packets by sequence numbers */

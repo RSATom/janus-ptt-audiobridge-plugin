@@ -2,7 +2,12 @@ cmake_minimum_required(VERSION 3.12)
 
 set(JANUS_PREFIX "/opt/janus" CACHE STRING "Janus Gateway install prefix")
 
-project(janus-ptt-audioroom-plugin)
+project(janus-ptt-audiobridge-plugin)
+
+if(DEFINED ENV{SNAPCRAFT_PROJECT_NAME})
+	add_definitions(-DSNAPCRAFT_BUILD=1)
+	set(SNAPCRAFT_BUILD YES)
+endif()
 
 SET(CMAKE_INSTALL_PREFIX ${JANUS_PREFIX})
 
@@ -42,6 +47,6 @@ target_link_libraries(${PROJECT_NAME}
     ${LIBOPUS_LDFLAGS})
 
 install(TARGETS ${PROJECT_NAME} DESTINATION lib/janus/plugins)
-if(DEFINED ENV{SNAPCRAFT_PROJECT_NAME})
-    install(FILES conf/janus.plugin.ptt-audioroom.jcfg.sample DESTINATION etc/janus)
+if(SNAPCRAFT_BUILD)
+	install(FILES conf/janus.plugin.ptt-audiobridge.jcfg.sample DESTINATION etc/janus)
 endif()

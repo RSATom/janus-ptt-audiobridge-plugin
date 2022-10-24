@@ -16,7 +16,7 @@ extern "C" {
 #include "audio_recorder.h"
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
 struct plugin_session;

@@ -1,4 +1,4 @@
-name: janus-plus-ptt-audioroom-plugin
+name: janus-plus-ptt-audiobridge-plugin
 base: core20
 version: git
 summary: Janus Gateway with PTT Audio Room plugin

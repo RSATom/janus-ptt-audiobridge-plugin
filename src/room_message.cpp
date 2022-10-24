@@ -3,7 +3,7 @@
 #include "plugin_session.h"
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
 room_message exit_message;

@@ -4,7 +4,7 @@
  * \copyright GNU General Public License v3
  */
 
-#include "ptt_audioroom_plugin.h"
+#include "ptt_audiobridge_plugin.h"
 
 #include <cassert>
 #include <memory>
@@ -48,7 +48,7 @@ extern "C" {
 #include "record.h"
 #include "thread_type.h"
 #include "janus_mutex_lock_guard.h"
-using namespace ptt_audioroom;
+using namespace ptt_audiobridge;
 
 /* Plugin methods */
 extern "C" janus_plugin *create(void);
@@ -69,9 +69,9 @@ static void incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *packet)
 static void hangup_media(janus_plugin_session *handle);
 static void destroy_session(janus_plugin_session *handle, int *error);
 
-namespace ptt_audioroom {
+namespace ptt_audiobridge {
 /* Plugin setup */
-janus_plugin ptt_audioroom_plugin =
+janus_plugin ptt_audiobridge_plugin =
 	janus_plugin{
 		.init = plugin_init,
 		.destroy = plugin_destroy,
@@ -97,11 +97,11 @@ janus_plugin ptt_audioroom_plugin =
 
 /* Plugin creator */
 janus_plugin *create(void) {
-	JANUS_LOG(LOG_VERB, "%s created!\n", PTT_AUDIOROOM_NAME);
-	return &ptt_audioroom_plugin;
+	JANUS_LOG(LOG_VERB, "%s created!\n", PTT_AUDIOBRIDGE_NAME);
+	return &ptt_audiobridge_plugin;
 }
 
-namespace ptt_audioroom {
+namespace ptt_audiobridge {
 /* Static configuration instance */
 janus_config *config = NULL;
 const char *config_folder = NULL;
@@ -109,7 +109,7 @@ janus_mutex config_mutex = JANUS_MUTEX_INITIALIZER;
 }
 
 /* Useful stuff */
-namespace ptt_audioroom {
+namespace ptt_audiobridge {
 gint initialized = 0, stopping = 0;
 gboolean notify_events = TRUE;
 gboolean ipv6_disabled = FALSE;
@@ -118,11 +118,11 @@ janus_callbacks *gateway = NULL;
 static GThread *handler_thread;
 static void hangup_media_internal(janus_plugin_session *handle);
 
-namespace ptt_audioroom {
+namespace ptt_audiobridge {
 GAsyncQueue *messages = NULL;
 }
 
-namespace ptt_audioroom {
+namespace ptt_audiobridge {
 GHashTable *rooms;
 janus_mutex rooms_mutex = JANUS_MUTEX_INITIALIZER;
 char *admin_key = NULL;
@@ -270,12 +270,12 @@ int plugin_init(janus_callbacks *callback, const char *config_path) {
 
 	/* Read configuration */
 	char filename[255];
-	g_snprintf(filename, 255, "%s/%s.jcfg", config_path, PTT_AUDIOROOM_PACKAGE);
+	g_snprintf(filename, 255, "%s/%s.jcfg", config_path, PTT_AUDIOBRIDGE_PACKAGE);
 	JANUS_LOG(LOG_VERB, "Configuration file: %s\n", filename);
 	config = janus_config_parse(filename);
 	if(config == NULL) {
-		JANUS_LOG(LOG_WARN, "Couldn't find .jcfg configuration file (%s), trying .cfg\n", PTT_AUDIOROOM_PACKAGE);
-		g_snprintf(filename, 255, "%s/%s.cfg", config_path, PTT_AUDIOROOM_PACKAGE);
+		JANUS_LOG(LOG_WARN, "Couldn't find .jcfg configuration file (%s), trying .cfg\n", PTT_AUDIOBRIDGE_PACKAGE);
+		g_snprintf(filename, 255, "%s/%s.cfg", config_path, PTT_AUDIOBRIDGE_PACKAGE);
 		JANUS_LOG(LOG_VERB, "Configuration file: %s\n", filename);
 		config = janus_config_parse(filename);
 	}
@@ -302,7 +302,7 @@ int plugin_init(janus_callbacks *callback, const char *config_path) {
 		if(events != NULL && events->value != NULL)
 			notify_events = janus_is_true(events->value);
 		if(!notify_events && callback->events_is_enabled()) {
-			JANUS_LOG(LOG_WARN, "Notification of events to handlers disabled for %s\n", PTT_AUDIOROOM_NAME);
+			JANUS_LOG(LOG_WARN, "Notification of events to handlers disabled for %s\n", PTT_AUDIOBRIDGE_NAME);
 		}
 	}
 
@@ -483,7 +483,7 @@ int plugin_init(janus_callbacks *callback, const char *config_path) {
 		janus_config_destroy(config);
 		return -1;
 	}
-	JANUS_LOG(LOG_INFO, "%s initialized!\n", PTT_AUDIOROOM_NAME);
+	JANUS_LOG(LOG_INFO, "%s initialized!\n", PTT_AUDIOBRIDGE_NAME);
 	return 0;
 }
 
@@ -514,7 +514,7 @@ void plugin_destroy(void) {
 
 	g_atomic_int_set(&initialized, 0);
 	g_atomic_int_set(&stopping, 0);
-	JANUS_LOG(LOG_INFO, "%s destroyed!\n", PTT_AUDIOROOM_NAME);
+	JANUS_LOG(LOG_INFO, "%s destroyed!\n", PTT_AUDIOBRIDGE_NAME);
 }
 
 int plugin_get_api_compatibility(void) {
@@ -523,27 +523,27 @@ int plugin_get_api_compatibility(void) {
 }
 
 int plugin_get_version(void) {
-	return PTT_AUDIOROOM_VERSION;
+	return PTT_AUDIOBRIDGE_VERSION;
 }
 
 const char *plugin_get_version_string(void) {
-	return PTT_AUDIOROOM_VERSION_STRING;
+	return PTT_AUDIOBRIDGE_VERSION_STRING;
 }
 
 const char *plugin_get_description(void) {
-	return PTT_AUDIOROOM_DESCRIPTION;
+	return PTT_AUDIOBRIDGE_DESCRIPTION;
 }
 
 const char *plugin_get_name(void) {
-	return PTT_AUDIOROOM_NAME;
+	return PTT_AUDIOBRIDGE_NAME;
 }
 
 const char *plugin_get_author(void) {
-	return PTT_AUDIOROOM_AUTHOR;
+	return PTT_AUDIOBRIDGE_AUTHOR;
 }
 
 const char *plugin_get_package(void) {
-	return PTT_AUDIOROOM_PACKAGE;
+	return PTT_AUDIOBRIDGE_PACKAGE;
 }
 
 void create_session(janus_plugin_session *handle, int *error) {
@@ -598,7 +598,7 @@ static void notify_participants(room_participant *participant, json_t *msg, gboo
 		room_participant *p = (room_participant *)value;
 		if(p && p->session && (p != participant || notify_source_participant)) {
 			JANUS_LOG(LOG_VERB, "Notifying participant %s (%s)\n", p->user_id_str, p->display ? p->display : "??");
-			int ret = gateway->push_event(p->session->handle, &ptt_audioroom_plugin, NULL, msg, NULL);
+			int ret = gateway->push_event(p->session->handle, &ptt_audiobridge_plugin, NULL, msg, NULL);
 			JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
 		}
 	}
@@ -607,7 +607,7 @@ static void notify_participants(room_participant *participant, json_t *msg, gboo
 void setup_media(janus_plugin_session *handle) {
 	assign_thread_type(thread_type::INCOMING_RTP);
 
-	JANUS_LOG(LOG_INFO, "[%s-%p] WebRTC media is now available\n", PTT_AUDIOROOM_PACKAGE, handle);
+	JANUS_LOG(LOG_INFO, "[%s-%p] WebRTC media is now available\n", PTT_AUDIOBRIDGE_PACKAGE, handle);
 	if(g_atomic_int_get(&stopping) || !g_atomic_int_get(&initialized))
 		return;
 	janus_mutex_lock(&sessions_mutex);
@@ -665,7 +665,7 @@ void setup_media(janus_plugin_session *handle) {
 			continue;	/* Skip the new participant itself */
 		}
 		JANUS_LOG(LOG_VERB, "Notifying participant %s (%s)\n", p->user_id_str, p->display ? p->display : "??");
-		int ret = gateway->push_event(p->session->handle, &ptt_audioroom_plugin, NULL, pub, NULL);
+		int ret = gateway->push_event(p->session->handle, &ptt_audiobridge_plugin, NULL, pub, NULL);
 		JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
 	}
 	json_decref(pub);
@@ -777,7 +777,7 @@ void incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *packet) {
 								json_object_set_new(info, "audiobridge", json_string(participant->talking ? "talking" : "stopped-talking"));
 								json_object_set_new(info, "room", json_string(participant->room ? participant->room->room_id_str : NULL));
 								json_object_set_new(info, "id", json_string(participant->user_id_str));
-								gateway->notify_event(&ptt_audioroom_plugin, session->handle, info);
+								gateway->notify_event(&ptt_audiobridge_plugin, session->handle, info);
 							}
 						}
 					}
@@ -877,7 +877,7 @@ void incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *packet) {
 void hangup_media(janus_plugin_session *handle) {
 	assert_thread_type_is(thread_type::INCOMING_RTP);
 
-	JANUS_LOG(LOG_INFO, "[%s-%p] No WebRTC media anymore\n", PTT_AUDIOROOM_PACKAGE, handle);
+	JANUS_LOG(LOG_INFO, "[%s-%p] No WebRTC media anymore\n", PTT_AUDIOBRIDGE_PACKAGE, handle);
 	janus_mutex_lock(&sessions_mutex);
 	hangup_media_internal(handle);
 	janus_mutex_unlock(&sessions_mutex);
@@ -937,7 +937,7 @@ static void hangup_media_internal(janus_plugin_session *handle) {
 				continue;	/* Skip the leaving participant itself */
 			}
 			JANUS_LOG(LOG_VERB, "Notifying participant %s (%s)\n", p->user_id_str, p->display ? p->display : "??");
-			int ret = gateway->push_event(p->session->handle, &ptt_audioroom_plugin, NULL, event, NULL);
+			int ret = gateway->push_event(p->session->handle, &ptt_audiobridge_plugin, NULL, event, NULL);
 			JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
 		}
 		json_decref(event);
@@ -949,7 +949,7 @@ static void hangup_media_internal(janus_plugin_session *handle) {
 			json_object_set_new(info, "room", json_string(audiobridge->room_id_str));
 			json_object_set(info, "participant", participantInfo);
 
-			gateway->notify_event(&ptt_audioroom_plugin, NULL, info);
+			gateway->notify_event(&ptt_audiobridge_plugin, NULL, info);
 		}
 		json_decref(participantInfo);
 	}

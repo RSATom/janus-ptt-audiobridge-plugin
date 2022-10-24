@@ -11,7 +11,7 @@ extern "C" {
 }
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
 struct ptt_room {

@@ -20,7 +20,7 @@ extern "C" {
 #include "janus/rtp.h"
 }
 
-namespace ptt_audioroom {
+namespace ptt_audiobridge {
 
 class audio_recorder {
 public:

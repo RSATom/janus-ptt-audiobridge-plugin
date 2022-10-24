@@ -3,7 +3,7 @@
 #include "room_participant.h"
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
 GHashTable *sessions;

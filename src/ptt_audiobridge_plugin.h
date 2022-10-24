@@ -12,10 +12,10 @@ extern "C" {
 #include "ptt_room.h"
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
-extern janus_plugin ptt_audioroom_plugin;
+extern janus_plugin ptt_audiobridge_plugin;
 
 extern janus_callbacks* gateway;
 

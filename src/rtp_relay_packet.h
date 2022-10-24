@@ -7,7 +7,7 @@ extern "C" {
 }
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
 struct rtp_relay_packet {

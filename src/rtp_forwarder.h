@@ -9,7 +9,7 @@ extern "C" {
 #include "janus/rtpsrtp.h"
 }
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
 struct ptt_room;

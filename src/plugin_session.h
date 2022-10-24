@@ -8,7 +8,7 @@ extern "C" {
 }
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 extern GHashTable* sessions;
 extern janus_mutex sessions_mutex;

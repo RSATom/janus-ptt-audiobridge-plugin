@@ -10,7 +10,7 @@ extern "C" {
 #include "ptt_room.h"
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
 guint32 rtp_forwarder_add_helper(ptt_room *room,

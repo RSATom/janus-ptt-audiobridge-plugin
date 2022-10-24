@@ -7,13 +7,13 @@ extern "C" {
 #include "janus/utils.h"
 }
 
-#include "ptt_audioroom_plugin.h"
+#include "ptt_audiobridge_plugin.h"
 #include "ptt_room.h"
 #include "rtp_relay_packet.h"
 #include "glib_ptr.h"
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
 // ptt_room::mutex should be locked
@@ -85,7 +85,7 @@ void mute_participant(
 		}
 		JANUS_LOG(LOG_VERB, "Notifying participant %s (%s)\n",
 			p->user_id_str, p->display ? p->display : "??");
-		int ret = gateway->push_event(p->session->handle, &ptt_audioroom_plugin, NULL, pub, NULL);
+		int ret = gateway->push_event(p->session->handle, &ptt_audiobridge_plugin, NULL, pub, NULL);
 		JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
 	}
 	json_decref(pub);
@@ -98,7 +98,7 @@ void mute_participant(
 		json_object_set_new(info, "room", json_string(audiobridge->room_id_str));
 		json_object_set(info, "participant", participantInfo);
 
-		gateway->notify_event(&ptt_audioroom_plugin, session ? session->handle : NULL, info);
+		gateway->notify_event(&ptt_audiobridge_plugin, session ? session->handle : NULL, info);
 	}
 	json_decref(participantInfo);
 }

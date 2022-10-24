@@ -8,14 +8,14 @@
 #include <sys/time.h>
 
 #include "constants.h"
-#include "ptt_audioroom_plugin.h"
+#include "ptt_audiobridge_plugin.h"
 #include "room_participant.h"
 #include "rtp_forwarder.h"
 #include "rtp_relay_packet.h"
 #include "janus_mutex_lock_guard.h"
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
 static void relay_rtp_packet(

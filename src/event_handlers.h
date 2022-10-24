@@ -9,7 +9,7 @@ extern "C" {
 #include <jansson.h>
 
 
-namespace ptt_audioroom
+namespace ptt_audiobridge
 {
 
 json_t* query_session(janus_plugin_session *handle);

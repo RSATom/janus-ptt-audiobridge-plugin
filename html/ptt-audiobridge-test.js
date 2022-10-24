@@ -50,7 +50,7 @@ $(document).ready(function() {
 						// Attach to AudioBridge plugin
 						janus.attach(
 							{
-								plugin: "janus.plugin.ptt-audioroom",
+								plugin: "janus.plugin.ptt-audiobridge",
 								opaqueId: opaqueId,
 								success: function(pluginHandle) {
 									$('#details').remove();
