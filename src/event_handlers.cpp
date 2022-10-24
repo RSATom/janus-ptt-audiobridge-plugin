@@ -2584,7 +2584,7 @@ void* message_handler_thread(void* data) {
 			g_snprintf(s_name, sizeof(s_name), "AudioBridge %s", participant->room->room_id_str);
 			/* Prepare a fmtp string too */
 			char fmtp[100];
-			g_snprintf(fmtp, sizeof(fmtp), "%d; useinbandfec=%d\r\n",
+			g_snprintf(fmtp, sizeof(fmtp), "%d useinbandfec=%d\r\n",
 				participant->opus_pt, participant->fec ? 1 : 0);
 			/* If we got an offer, we need to answer */
 			janus_sdp *offer = NULL, *answer = NULL;
