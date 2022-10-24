@@ -24,11 +24,21 @@ layout:
     bind: $SNAP/opt/janus/share/janus/streams
 
 parts:
+  libsrtp:
+    plugin: autotools
+    source-type: git
+    source: https://github.com/cisco/libsrtp.git
+    source-tag: v2.3.0
+    autotools-configure-parameters:
+      - --prefix=/usr
+      - --enable-openssl
   plugin:
     plugin: cmake
     source: .
     cmake-parameters:
       - -DCMAKE_FIND_ROOT_PATH=/snap/janus-gateway/current
+    after:
+      - libsrtp
     build-snaps:
       - janus-gateway
     build-packages:
