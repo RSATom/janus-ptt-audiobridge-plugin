@@ -217,12 +217,12 @@ void* room_sender_thread(void* data) {
 					go_on = TRUE;
 				}
 				if(go_on) {
-					memcpy(rtpbuffer, pkt->data, std::min<gsize>(pkt->length, max_rtp_size));
+					const gsize rtp_size = std::min<gsize>(pkt->length, max_rtp_size);
+					memcpy(rtpbuffer, pkt->data, rtp_size);
 
 					GHashTableIter iter;
 					gpointer key, value;
 					g_hash_table_iter_init(&iter, audiobridge->rtp_forwarders);
-					opus_int32 length = 0;
 					while(audiobridge->rtp_udp_sock > 0 && g_hash_table_iter_next(&iter, &key, &value)) {
 						guint32 stream_id = GPOINTER_TO_UINT(key);
 						rtp_forwarder *forwarder = (rtp_forwarder *)value;
@@ -240,7 +240,7 @@ void* room_sender_thread(void* data) {
 						rtph->timestamp = htonl(forwarder->timestamp);
 						/* Check if this packet needs to be encrypted */
 						char *payload = (char *)rtph;
-						int plen = length+12;
+						int plen = rtp_size;
 						if(forwarder->is_srtp) {
 							memcpy(sbuf, payload, plen);
 							int protected_ = plen;
