@@ -1,3 +1,8 @@
+/*! \file
+ * \author Sergey Radionov <rsatom@gmail.com>
+ * \copyright MIT License
+ */
+
 #pragma once
 
 

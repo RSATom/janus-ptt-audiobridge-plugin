@@ -1,3 +1,9 @@
+/*! \file
+ * \author Lorenzo Miniero <lorenzo@meetecho.com>
+ * \author Sergey Radionov <rsatom@gmail.com>
+ * \copyright GNU General Public License v3
+ */
+
 #include "event_handlers.h"
 
 #include <netdb.h>

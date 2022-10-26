@@ -1,3 +1,9 @@
+/*! \file
+ * \author Lorenzo Miniero <lorenzo@meetecho.com>
+ * \author Sergey Radionov <rsatom@gmail.com>
+ * \copyright GNU General Public License v3
+ */
+
 #include "rtp_forwarder.h"
 
 #include <glib.h>
