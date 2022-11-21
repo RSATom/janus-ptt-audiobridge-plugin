@@ -1219,19 +1219,6 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 		json_object_set_new(response, "room", json_string(room_id_str));
 		json_object_set_new(response, "participants", list);
 		goto prepare_response;
-	} else if(!strcasecmp(request_text, "resetdecoder")) {
-		/* Mark the Opus decoder for the participant invalid and recreate it */
-		room_participant *participant = (room_participant *)(session ? session->participant : NULL);
-		if(participant == NULL || participant->room == NULL) {
-			JANUS_LOG(LOG_ERR, "Can't reset (not in a room)\n");
-			error_code = PTT_AUDIOBRIDGE_ERROR_NOT_JOINED;
-			g_snprintf(error_cause, 512, "Can't reset (not in a room)");
-			goto prepare_response;
-		}
-		participant->reset = TRUE;
-		response = json_object();
-		json_object_set_new(response, "audiobridge", json_string("success"));
-		goto prepare_response;
 	} else if(!strcasecmp(request_text, "rtp_forward")) {
 		JANUS_VALIDATE_JSON_OBJECT(root, rtp_forward_parameters,
 			error_code, error_cause, TRUE,
@@ -1877,7 +1864,6 @@ void* message_handler_thread(void* data) {
 				participant->display = NULL;
 				participant->inbuf = NULL;
 				participant->last_drop = 0;
-				participant->reset = FALSE;
 				participant->fec = FALSE;
 				participant->expected_seq = 0;
 				participant->probation = 0;
@@ -1902,7 +1888,6 @@ void* message_handler_thread(void* data) {
 				participant->dBov_level = 0;
 				participant->talking = FALSE;
 			}
-			participant->reset = FALSE;
 			/* If a PeerConnection exists, make sure to update the RTP headers */
 			if(g_atomic_int_get(&session->started) == 1)
 				participant->context.last_ssrc = 0;

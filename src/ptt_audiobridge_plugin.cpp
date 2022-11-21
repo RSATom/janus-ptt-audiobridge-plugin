@@ -692,8 +692,6 @@ void incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *packet) {
 	uint16_t len = packet->length;
 
 	if(g_atomic_int_get(&participant->active)) {
-		participant->reset = FALSE;
-
 		/* Decode frame (Opus -> slinear) */
 		janus_rtp_header *rtp = (janus_rtp_header *)buf;
 		rtp_relay_packet *pkt = (rtp_relay_packet *)g_malloc(sizeof(rtp_relay_packet));
@@ -961,7 +959,6 @@ static void hangup_media_internal(janus_plugin_session *handle) {
 	g_free(participant->display);
 	participant->display = NULL;
 	participant->prebuffering = TRUE;
-	participant->reset = FALSE;
 	participant->audio_active_packets = 0;
 	participant->audio_dBov_sum = 0;
 	participant->talking = FALSE;

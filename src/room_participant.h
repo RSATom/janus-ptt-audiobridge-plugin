@@ -63,7 +63,6 @@ struct room_participant {
 	uint16_t expected_seq;		/* Expected sequence number */
 	uint16_t probation; 		/* Used to determine new ssrc validity */
 	uint32_t last_timestamp;	/* Last in seq timestamp */
-	gboolean reset;				/* Whether or not the Opus context must be reset, without re-joining the room */
 	gint destroyed;	/* Whether this room has been destroyed */
 
 	std::thread::id incoming_rtp_thread_id;
