@@ -171,7 +171,7 @@ static int check_room_access(json_t *root, gboolean check_modify, ptt_room **aud
 	/* rooms_mutex has to be locked */
 	int error_code = 0;
 	json_t *room = json_object_get(root, "room");
-	char room_id_num[30], *room_id_str = NULL;
+	char *room_id_str = NULL;
 	room_id_str = (char *)json_string_value(room);
 	*audiobridge = (ptt_room *)g_hash_table_lookup(rooms, (gpointer)room_id_str);
 	if(*audiobridge == NULL) {
@@ -276,7 +276,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			g_snprintf(error_cause, 512, "No configuration file, can't create permanent room");
 			goto prepare_response;
 		}
-		char room_id_num[30], *room_id_str = NULL;
+		char *room_id_str = NULL;
 		json_t *room = json_object_get(root, "room");
 		room_id_str = (char *)json_string_value(room);
 		if(room_id_str == NULL) {
@@ -489,7 +489,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			g_snprintf(error_cause, 512, "No configuration file, can't edit room permanently");
 			goto prepare_response;
 		}
-		char room_id_num[30], *room_id_str = NULL;
+		char *room_id_str = NULL;
 		room_id_str = (char *)json_string_value(room);
 		janus_mutex_lock(&rooms_mutex);
 		ptt_room *audiobridge =
@@ -624,7 +624,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			g_snprintf(error_cause, 512, "No configuration file, can't destroy room permanently");
 			goto prepare_response;
 		}
-		char room_id_num[30], *room_id_str = NULL;
+		char *room_id_str = NULL;
 		room_id_str = (char *)json_string_value(room);
 		janus_mutex_lock(&rooms_mutex);
 		ptt_room *audiobridge =
@@ -802,7 +802,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 		if(error_code != 0)
 			goto prepare_response;
 		json_t *room = json_object_get(root, "room");
-		char room_id_num[30], *room_id_str = NULL;
+		char *room_id_str = NULL;
 		room_id_str = (char *)json_string_value(room);
 		janus_mutex_lock(&rooms_mutex);
 		gboolean room_exists = g_hash_table_contains(rooms, (gpointer)room_id_str);
@@ -835,7 +835,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			g_snprintf(error_cause, 512, "Unsupported action '%s' (allowed)", action_text);
 			goto prepare_response;
 		}
-		char room_id_num[30], *room_id_str = NULL;
+		char *room_id_str = NULL;
 		room_id_str = (char *)json_string_value(room);
 		janus_mutex_lock(&rooms_mutex);
 		ptt_room *audiobridge =
@@ -939,7 +939,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 		json_t *room = json_object_get(root, "room");
 		json_t *id = json_object_get(root, "id");
 		gboolean muted = (!strcasecmp(request_text, "mute")) ? TRUE : FALSE;
-		char room_id_num[30], *room_id_str = NULL;
+		char *room_id_str = NULL;
 		room_id_str = (char *)json_string_value(room);
 		janus_mutex_lock(&rooms_mutex);
 		ptt_room *audiobridge =
@@ -1030,7 +1030,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			goto prepare_response;
 		json_t *room = json_object_get(root, "room");
 		json_t *id = json_object_get(root, "id");
-		char room_id_num[30], *room_id_str = NULL;
+		char *room_id_str = NULL;
 		room_id_str = (char *)json_string_value(room);
 		janus_mutex_lock(&rooms_mutex);
 		ptt_room *audiobridge =
@@ -1112,7 +1112,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 		if(error_code != 0)
 			goto prepare_response;
 		json_t *room = json_object_get(root, "room");
-		char room_id_num[30], *room_id_str = NULL;
+		char *room_id_str = NULL;
 		room_id_str = (char *)json_string_value(room);
 		janus_mutex_lock(&rooms_mutex);
 		ptt_room *audiobridge =
@@ -1181,7 +1181,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 		if(error_code != 0)
 			goto prepare_response;
 		json_t *room = json_object_get(root, "room");
-		char room_id_num[30], *room_id_str = NULL;
+		char *room_id_str = NULL;
 		room_id_str = (char *)json_string_value(room);
 		janus_mutex_lock(&rooms_mutex);
 		ptt_room *audiobridge =
@@ -1243,7 +1243,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 		}
 		/* Parse arguments */
 		json_t *room = json_object_get(root, "room");
-		char room_id_num[30], *room_id_str = NULL;
+		char *room_id_str = NULL;
 		room_id_str = (char *)json_string_value(room);
 		guint32 ssrc_value = 0;
 		json_t *ssrc = json_object_get(root, "ssrc");
@@ -1405,7 +1405,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 		}
 		/* Parse parameters */
 		json_t *room = json_object_get(root, "room");
-		char room_id_num[30], *room_id_str = NULL;
+		char *room_id_str = NULL;
 		room_id_str = (char *)json_string_value(room);
 		guint32 stream_id = json_integer_value(json_object_get(root, "stream_id"));
 		/* Update room */
@@ -1453,7 +1453,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 		if(error_code != 0)
 			goto prepare_response;
 		json_t *room = json_object_get(root, "room");
-		char room_id_num[30], *room_id_str = NULL;
+		char *room_id_str = NULL;
 		room_id_str = (char *)json_string_value(room);
 		janus_mutex_lock(&rooms_mutex);
 		ptt_room *audiobridge =
@@ -1769,7 +1769,7 @@ void* message_handler_thread(void* data) {
 			if(error_code != 0)
 				goto error;
 			json_t *room = json_object_get(root, "room");
-			char room_id_num[30], *room_id_str = NULL;
+			char *room_id_str = NULL;
 			room_id_str = (char *)json_string_value(room);
 			janus_mutex_lock(&rooms_mutex);
 			ptt_room *audiobridge =
@@ -2142,7 +2142,7 @@ void* message_handler_thread(void* data) {
 			if(error_code != 0)
 				goto error;
 			json_t *room = json_object_get(root, "room");
-			char room_id_num[30], *room_id_str = NULL;
+			char *room_id_str = NULL;
 			room_id_str = (char *)json_string_value(room);
 			janus_mutex_lock(&rooms_mutex);
 			room_participant *participant = (room_participant *)session->participant;
