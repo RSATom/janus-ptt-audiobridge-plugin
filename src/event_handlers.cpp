@@ -938,7 +938,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			goto prepare_response;
 		json_t *room = json_object_get(root, "room");
 		json_t *id = json_object_get(root, "id");
-		gboolean muted = (!strcasecmp(request_text, "mute")) ? TRUE : FALSE;
+		gboolean muting = (!strcasecmp(request_text, "mute")) ? TRUE : FALSE;
 		char *room_id_str = NULL;
 		room_id_str = (char *)json_string_value(room);
 		janus_mutex_lock(&rooms_mutex);
@@ -977,7 +977,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			goto prepare_response;
 		}
 
-		if(!muted && audiobridge->unmuted_participant && audiobridge->unmuted_participant != participant) {
+		if(!muting && audiobridge->unmuted_participant && audiobridge->unmuted_participant != participant) {
 			janus_mutex_unlock(&audiobridge->mutex);
 			janus_refcount_decrease(audiobridge);
 			JANUS_LOG(LOG_ERR, "Room \"%s\" already has unmuted user\n", room_id_str);
@@ -986,7 +986,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			goto prepare_response;
 		}
 
-		if(participant->muted == muted) {
+		if(participant->muted == muting) {
 			/* If someone trying to mute an already muted user, or trying to unmute a user that is not mute),
 			then we should do nothing */
 
@@ -1000,7 +1000,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			goto prepare_response;
 		}
 
-		mute_participant(session, participant, muted, TRUE, TRUE);
+		mute_participant(session, participant, muting, TRUE, TRUE);
 
 		/* Prepare response */
 		response = json_object();
