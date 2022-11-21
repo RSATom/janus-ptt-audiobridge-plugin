@@ -72,6 +72,7 @@ void* room_sender_thread(void* data) {
 	char sbuf[1500];
 
 	room_participant* unmuted_participant = nullptr;
+	std::string unmuted_participant_id;
 	std::unique_ptr<audio_recorder> recorder_ptr;
 
 	/* Loop */
@@ -135,10 +136,20 @@ void* room_sender_thread(void* data) {
 
 		room_participant* current_unmuted_participant = audiobridge->unmuted_participant;
 
-		if(unmuted_participant != current_unmuted_participant) {
+		// There is a very small chance new participant will be allocated on the same address
+		// as already destroyed unmuted participant.
+		// So let's protect from it by comparing ids also.
+		if(unmuted_participant != current_unmuted_participant ||
+			(current_unmuted_participant &&
+				unmuted_participant_id != current_unmuted_participant->user_id_str))
+		{
 			recorder_ptr.reset();
 
 			unmuted_participant = current_unmuted_participant;
+			if(current_unmuted_participant)
+				unmuted_participant_id = current_unmuted_participant->user_id_str;
+			else
+				unmuted_participant_id.clear();
 
 			if(audiobridge->mjrs && audiobridge->mjrs_dir &&
 				unmuted_participant && !unmuted_participant->recording_id.empty())
