@@ -28,8 +28,9 @@ namespace ptt_audiobridge
 struct plugin_session;
 struct ptt_room;
 
-struct room_participant {
-	janus_refcount ref;			/* Reference counter for this participant */
+struct room_participant: public janus_refcount {
+	static room_participant* create();
+
 	plugin_session *session;
 
 	// changing only when ptt_room::mutex is locked
@@ -80,6 +81,5 @@ void clear_inbuf(room_participant *participant, bool lock_qmutex);
 
 void participant_destroy(room_participant *participant);
 void participant_unref(room_participant *participant);
-void participant_free(const janus_refcount *participant_ref);
 
 }

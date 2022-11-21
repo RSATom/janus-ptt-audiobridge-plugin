@@ -22,6 +22,15 @@ extern "C" {
 namespace ptt_audiobridge
 {
 
+static void participant_free(const janus_refcount *participant_ref);
+
+room_participant* room_participant::create()
+{
+	room_participant* participant = new room_participant {};
+	janus_refcount_init(participant, participant_free);
+	return participant;
+}
+
 // ptt_room::mutex should be locked
 std::string generate_recording_id(room_participant* participant) {
 	const ptt_room* room = participant->room;
@@ -128,19 +137,21 @@ void participant_destroy(room_participant *participant) {
 	if(!g_atomic_int_compare_and_exchange(&participant->destroyed, 0, 1))
 		return;
 	/* Decrease the counter */
-	janus_refcount_decrease(&participant->ref);
+	janus_refcount_decrease(participant);
 }
 
 void participant_unref(room_participant *participant) {
 	if(!participant)
 		return;
 	/* Just decrease the counter */
-	janus_refcount_decrease(&participant->ref);
+	janus_refcount_decrease(participant);
 }
 
-void participant_free(const janus_refcount *participant_ref) {
-	static_assert(std::is_standard_layout<room_participant>::value);
-	room_participant *participant = (room_participant*)participant_ref;
+static void participant_free(const janus_refcount *participant_ref) {
+	room_participant *participant =
+		const_cast<room_participant*>( // yes, I know, it's ugly, but I can do nothing atm
+			static_cast<const room_participant*>(participant_ref));
+
 	/* This participant can be destroyed, free all the resources */
 	g_free(participant->user_id_str);
 	g_free(participant->display);
@@ -152,6 +163,7 @@ void participant_free(const janus_refcount *participant_ref) {
 			g_free(pkt->data);
 		g_free(pkt);
 	}
+
 	delete participant;
 }
 

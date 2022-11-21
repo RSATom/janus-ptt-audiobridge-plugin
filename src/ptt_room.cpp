@@ -24,6 +24,15 @@
 namespace ptt_audiobridge
 {
 
+static void ptt_room_free(const janus_refcount *audiobridge_ref);
+
+ptt_room* ptt_room::create()
+{
+	ptt_room* room= new ptt_room {};
+	janus_refcount_init(room, ptt_room_free);
+	return room;
+}
+
 static void relay_rtp_packet(
 	room_participant *participant,
 	plugin_session* session,
@@ -130,7 +139,7 @@ void* room_sender_thread(void* data) {
 					JANUS_LOG(LOG_ERR, "Muted participant has queued packets.\n");
 			}
 
-			janus_refcount_increase(&p->ref);
+			janus_refcount_increase(p);
 			ps = ps->next;
 		}
 
@@ -296,7 +305,7 @@ void* room_sender_thread(void* data) {
 		ps = participants_list;
 		while(ps) {
 			room_participant *p = (room_participant *)ps->data;
-			janus_refcount_decrease(&p->ref);
+			janus_refcount_decrease(p);
 			ps = ps->next;
 		}
 		g_list_free(participants_list);
@@ -305,7 +314,7 @@ void* room_sender_thread(void* data) {
 	g_free(rtpbuffer);
 	JANUS_LOG(LOG_VERB, "Leaving sender thread for room %s (%s)...\n", audiobridge->room_id_str, audiobridge->room_name);
 
-	janus_refcount_decrease(&audiobridge->ref);
+	janus_refcount_decrease(audiobridge);
 
 	return NULL;
 }
@@ -339,12 +348,14 @@ void ptt_room_destroy(ptt_room *audiobridge) {
 	if(!g_atomic_int_compare_and_exchange(&audiobridge->destroyed, 0, 1))
 		return;
 	/* Decrease the counter */
-	janus_refcount_decrease(&audiobridge->ref);
+	janus_refcount_decrease(audiobridge);
 }
 
-void ptt_room_free(const janus_refcount *audiobridge_ref) {
-	static_assert(std::is_standard_layout<ptt_room>::value);
-	ptt_room *audiobridge =(ptt_room*)audiobridge_ref;
+static void ptt_room_free(const janus_refcount *audiobridge_ref) {
+	ptt_room *audiobridge =
+		const_cast<ptt_room*>( // yes, I know, it's ugly, but I can do nothing atm
+			static_cast<const ptt_room*>(audiobridge_ref));
+
 	/* This room can be destroyed, free all the resources */
 	g_free(audiobridge->room_id_str);
 	g_free(audiobridge->room_name);
@@ -355,6 +366,7 @@ void ptt_room_free(const janus_refcount *audiobridge_ref) {
 	if(audiobridge->rtp_udp_sock > 0)
 		close(audiobridge->rtp_udp_sock);
 	g_hash_table_destroy(audiobridge->rtp_forwarders);
+
 	delete audiobridge;
 }
 

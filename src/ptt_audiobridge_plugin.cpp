@@ -330,8 +330,7 @@ int plugin_init(janus_callbacks *callback, const char *config_path) {
 			janus_config_item *mjrs = janus_config_get(config, cat, janus_config_type_item, "mjrs");
 			janus_config_item *mjrsdir = janus_config_get(config, cat, janus_config_type_item, "mjrs_dir");
 			/* Create the AudioBridge room */
-			ptt_room *audiobridge = new ptt_room {};
-			janus_refcount_init(&audiobridge->ref, ptt_room_free);
+			ptt_room *audiobridge = ptt_room::create();
 			const char *room_num = cat->name;
 			if(strstr(room_num, "room-") == room_num)
 				room_num += 5;
@@ -423,11 +422,11 @@ int plugin_init(janus_callbacks *callback, const char *config_path) {
 			GError *error = NULL;
 			char tname[16];
 			g_snprintf(tname, sizeof(tname), "sender %s", audiobridge->room_id_str);
-			janus_refcount_increase(&audiobridge->ref);
+			janus_refcount_increase(audiobridge);
 			audiobridge->thread = g_thread_try_new(tname, &room_sender_thread, audiobridge, &error);
 			if(error != NULL) {
 				/* FIXME We should clear some resources... */
-				janus_refcount_decrease(&audiobridge->ref);
+				janus_refcount_decrease(audiobridge);
 				JANUS_LOG(LOG_ERR, "Got error %d (%s) trying to launch the sender thread...\n",
 					error->code, error->message ? error->message : "??");
 				g_error_free(error);
@@ -968,7 +967,7 @@ static void hangup_media_internal(janus_plugin_session *handle) {
 	if(audiobridge != NULL) {
 		janus_mutex_unlock(&audiobridge->mutex);
 		if(removed) {
-			janus_refcount_decrease(&audiobridge->ref);
+			janus_refcount_decrease(audiobridge);
 		}
 	}
 	janus_mutex_unlock(&rooms_mutex);

@@ -20,8 +20,9 @@ extern "C" {
 namespace ptt_audiobridge
 {
 
-struct ptt_room {
-	janus_refcount ref;			/* Reference counter for this room */
+struct ptt_room: public janus_refcount {
+	static ptt_room* create();
+
 	gchar *room_id_str;			/* Unique room ID (when using strings) */
 	gchar *room_name;			/* Room description */
 	gchar *room_secret;			/* Secret needed to manipulate (e.g., destroy) this room */
@@ -54,6 +55,5 @@ void* room_sender_thread(void* data);
 int create_udp_socket_if_needed(ptt_room *audiobridge);
 
 void ptt_room_destroy(ptt_room *audiobridge);
-void ptt_room_free(const janus_refcount *audiobridge_ref);
 
 }
