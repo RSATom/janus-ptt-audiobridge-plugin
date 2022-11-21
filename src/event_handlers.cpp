@@ -6,6 +6,8 @@
 
 #include "event_handlers.h"
 
+#include <cassert>
+
 #include <netdb.h>
 
 extern "C" {
@@ -2305,9 +2307,11 @@ void* message_handler_thread(void* data) {
 			janus_mutex_unlock(&old_audiobridge->mutex);
 
 			janus_refcount_decrease(&old_audiobridge->ref);
+
 			/* Done, join the new one */
 			g_free(participant->user_id_str);
-			participant->user_id_str = user_id_str ? g_strdup(user_id_str) : NULL;
+			assert(user_id_str);
+			participant->user_id_str = g_strdup(user_id_str);
 			participant->admin = admin;
 			g_free(participant->display);
 			participant->display = display_text ? g_strdup(display_text) : NULL;
