@@ -692,7 +692,6 @@ void incoming_rtp(janus_plugin_session *handle, janus_plugin_rtp *packet) {
 	uint16_t len = packet->length;
 
 	if(g_atomic_int_get(&participant->active)) {
-		/* Decode frame (Opus -> slinear) */
 		janus_rtp_header *rtp = (janus_rtp_header *)buf;
 		rtp_relay_packet *pkt = (rtp_relay_packet *)g_malloc(sizeof(rtp_relay_packet));
 		pkt->data = (janus_rtp_header *)g_malloc0(BUFFER_SAMPLES*sizeof(opus_int16));
