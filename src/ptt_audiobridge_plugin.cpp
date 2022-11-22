@@ -126,7 +126,7 @@ namespace ptt_audiobridge {
 GHashTable *rooms;
 janus_mutex rooms_mutex = JANUS_MUTEX_INITIALIZER;
 char *admin_key = NULL;
-gboolean lock_rtpfwd = FALSE;
+gboolean lock_rtpfwd = TRUE;
 }
 
 
