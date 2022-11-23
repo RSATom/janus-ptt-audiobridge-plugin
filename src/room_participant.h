@@ -50,7 +50,7 @@ struct room_participant: public janus_refcount {
 	gint64 last_drop;		/* When we last dropped a packet because the imcoming queue was full */
 	gint64 inbuf_timestamp;	/* Last inbuf update timestamp */
 	janus_mutex qmutex;		/* Incoming queue mutex */
-	int opus_pt;			/* Opus payload type */
+	int opus_pt;			/* Opus payload type */ // FIXME! it should have 8 bit type
 	int extmap_id;			/* Audio level RTP extension id, if any */
 	int dBov_level;			/* Value in dBov of the audio level (last value from extension) */
 	int audio_active_packets;	/* Participant's number of audio packets to accumulate */
