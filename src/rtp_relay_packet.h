@@ -17,11 +17,14 @@ namespace ptt_audiobridge
 {
 
 struct rtp_relay_packet {
-	janus_rtp_header *data;
+	janus_rtp_header* data;
 	gint length;
+
 	uint32_t ssrc;
-	uint32_t timestamp;
-	uint16_t seq_number;
+
+	uint32_t timestamp; // in host byte order
+	uint16_t seq_number; // in host byte order
+
 	gboolean silence;
 };
 
