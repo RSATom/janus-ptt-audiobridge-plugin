@@ -14,7 +14,6 @@ SET(CMAKE_INSTALL_PREFIX ${JANUS_PREFIX})
 find_package(PkgConfig REQUIRED)
 pkg_search_module(GLIB REQUIRED glib-2.0)
 pkg_search_module(LIBJANSSON REQUIRED jansson)
-pkg_search_module(LIBOPUS REQUIRED opus)
 pkg_search_module(LIBSRTP2 REQUIRED libsrtp2)
 add_compile_definitions(HAVE_SRTP_2)
 
@@ -41,10 +40,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${JANUS_INCLUDE_PATH}/janus/plugins/
     ${GLIB_INCLUDE_DIRS}
     ${LIBJANSSON_INCLUDE_DIRS}
-    ${LIBOPUS_INCLUDE_DIRS}
     ${LIBSRTP2_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME}
-    ${LIBOPUS_LDFLAGS})
 
 install(TARGETS ${PROJECT_NAME} DESTINATION lib/janus/plugins)
 if(SNAPCRAFT_BUILD)
