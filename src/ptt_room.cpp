@@ -216,7 +216,6 @@ void* room_sender_thread(void* data) {
 					pkt->silence = FALSE;
 					pkt->data->version = 2;
 					pkt->data->markerbit = 0;	/* FIXME Should be 1 for the first packet */
-					/* Backup the actual timestamp and sequence number set by the audiobridge, in case a room is changed */
 					relay_rtp_packet(p, p->session, pkt);
 
 					ps = ps->next;
