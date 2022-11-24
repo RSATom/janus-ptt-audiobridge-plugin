@@ -34,25 +34,36 @@ ptt_room* ptt_room::create()
 }
 
 static void relay_rtp_packet(
-	room_participant *participant,
-	plugin_session* session,
-	rtp_relay_packet *packet)
+	room_participant* target_participant,
+	void* rtp_packet,
+	unsigned rtp_packet_size)
 {
-	/* Set the payload type */
-	packet->data->type = participant->opus_pt;
-	const auto timestamp_save = packet->data->timestamp;
-	const auto seq_number_save = packet->data->seq_number;
+	assert(rtp_packet_size >= rtp_header_size);
+
+	janus_rtp_header* rtp_header = (janus_rtp_header*)rtp_packet;
+
+	const auto timestamp_save = rtp_header->timestamp;
+	const auto seq_number_save = rtp_header->seq_number;
+
 	/* Fix sequence number and timestamp (room switching may be involved) */
-	janus_rtp_header_update(packet->data, &participant->context, FALSE, 0);
+	janus_rtp_header_update(rtp_header, &target_participant->context, FALSE, 0);
+
 	if(gateway != NULL) {
-		janus_plugin_rtp rtp = { .mindex = -1, .video = FALSE, .buffer = (char *)packet->data, .length = (uint16_t)packet->length };
+		janus_plugin_rtp rtp = {
+			.mindex = -1,
+			.video = FALSE,
+			.buffer = (char *)rtp_packet,
+			.length = (uint16_t)rtp_packet_size
+		};
 		janus_plugin_rtp_extensions_reset(&rtp.extensions);
 		/* FIXME Should we add our own audio level extension? */
-		gateway->relay_rtp(session->handle, &rtp);
+		gateway->relay_rtp(target_participant->session->handle, &rtp);
 	}
-	/* Restore the timestamp and sequence number to what the sender set them to */
-	packet->data->timestamp = timestamp_save;
-	packet->data->seq_number = seq_number_save;
+
+	// janus_rtp_header_update alters timestamp and seq_number,
+	// so let's restore it to original value for safety
+	rtp_header->timestamp = timestamp_save;
+	rtp_header->seq_number = seq_number_save;
 }
 
 static void update_rtp_header(
@@ -242,7 +253,8 @@ void* room_sender_thread(void* data) {
 						continue;
 					}
 
-					relay_rtp_packet(p, p->session, pkt);
+					pkt->data->type = p->opus_pt;
+					relay_rtp_packet(p, pkt->data, pkt->length);
 
 					ps = ps->next;
 				}
