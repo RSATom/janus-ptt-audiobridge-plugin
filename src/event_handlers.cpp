@@ -25,6 +25,8 @@ extern "C" {
 #include "rtp_forwarder.h"
 #include "rtp_relay_packet.h"
 #include "room_message.h"
+#include "janus_mutex_lock_guard.h"
+#include "glib_ptr.h"
 
 
 /* Parameter validation */
@@ -110,6 +112,11 @@ static struct janus_json_parameter rtp_forward_parameters[] = {
 };
 static struct janus_json_parameter stop_rtp_forward_parameters[] = {
 	{"stream_id", JSON_INTEGER, JANUS_JSON_PARAM_REQUIRED | JANUS_JSON_PARAM_POSITIVE}
+};
+static struct janus_json_parameter play_file_parameters[] = {
+	{"filename", JSON_STRING, JANUS_JSON_PARAM_REQUIRED},
+	{"file_id", JSON_STRING, 0},
+	{"unlink_on_stop", JANUS_JSON_BOOL, 0}
 };
 
 namespace ptt_audiobridge
@@ -985,6 +992,14 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			g_snprintf(error_cause, 512, "Room \"%s\" already has unmuted user\n", room_id_str);
 			goto prepare_response;
 		}
+		if(!muting && audiobridge->playing_file) {
+			janus_mutex_unlock(&audiobridge->mutex);
+			janus_refcount_decrease(audiobridge);
+			JANUS_LOG(LOG_ERR, "Room \"%s\" already playing file\n", room_id_str);
+			error_code = PTT_AUDIOBRIDGE_ERROR_ROOM_ALREADY_PLAYING_FILE;
+			g_snprintf(error_cause, 512, "Room \"%s\" already playing file\n", room_id_str);
+			goto prepare_response;
+		}
 
 		if(participant->muted == muting) {
 			/* If someone trying to mute an already muted user, or trying to unmute a user that is not mute),
@@ -1010,6 +1025,83 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 		/* Done */
 		janus_mutex_unlock(&audiobridge->mutex);
 		janus_refcount_decrease(audiobridge);
+		goto prepare_response;
+	} else if(!strcasecmp(request_text, "play_file")) {
+		JANUS_VALIDATE_JSON_OBJECT(root, roomstr_parameters,
+			error_code, error_cause, TRUE,
+			PTT_AUDIOBRIDGE_ERROR_MISSING_ELEMENT, PTT_AUDIOBRIDGE_ERROR_INVALID_ELEMENT);
+		if(error_code != 0)
+			goto prepare_response;
+		JANUS_VALIDATE_JSON_OBJECT(root, play_file_parameters,
+			error_code, error_cause, TRUE,
+			PTT_AUDIOBRIDGE_ERROR_MISSING_ELEMENT, PTT_AUDIOBRIDGE_ERROR_INVALID_ELEMENT);
+		if(error_code != 0)
+			goto prepare_response;
+		if(lock_playfile && admin_key != NULL) {
+			/* An admin key was specified: make sure it was provided, and that it's valid */
+			JANUS_VALIDATE_JSON_OBJECT(root, adminkey_parameters,
+				error_code, error_cause, TRUE,
+				PTT_AUDIOBRIDGE_ERROR_MISSING_ELEMENT, PTT_AUDIOBRIDGE_ERROR_INVALID_ELEMENT);
+			if(error_code != 0)
+				goto prepare_response;
+			JANUS_CHECK_SECRET(admin_key, root, "admin_key", error_code, error_cause,
+				PTT_AUDIOBRIDGE_ERROR_MISSING_ELEMENT, PTT_AUDIOBRIDGE_ERROR_INVALID_ELEMENT, PTT_AUDIOBRIDGE_ERROR_UNAUTHORIZED);
+			if(error_code != 0)
+				goto prepare_response;
+		}
+
+		/* Parse parameters */
+		json_t* room = json_object_get(root, "room");
+		char* room_id_str = nullptr;
+		room_id_str = (char *)json_string_value(room);
+
+		/* Update room */
+		janus_mutex_lock_guard rooms_guard(&rooms_mutex);
+		ptt_room *audiobridge =
+			(ptt_room*)g_hash_table_lookup(rooms, (gpointer)room_id_str);
+		if(!audiobridge) {
+			JANUS_LOG(LOG_ERR, "No such room (%s)\n", room_id_str);
+			error_code = PTT_AUDIOBRIDGE_ERROR_NO_SUCH_ROOM;
+			g_snprintf(error_cause, 512, "No such room (%s)", room_id_str);
+			goto prepare_response;
+		}
+
+		/* A secret may be required for this action */
+		JANUS_CHECK_SECRET(audiobridge->room_secret, root, "secret", error_code, error_cause,
+			PTT_AUDIOBRIDGE_ERROR_MISSING_ELEMENT, PTT_AUDIOBRIDGE_ERROR_INVALID_ELEMENT, PTT_AUDIOBRIDGE_ERROR_UNAUTHORIZED);
+		if(error_code != 0) {
+			goto prepare_response;
+		}
+
+		janus_mutex_lock_guard audiobridge_guard(&audiobridge->mutex);
+		if(audiobridge->destroyed) {
+			JANUS_LOG(LOG_ERR, "No such room (%s)\n", room_id_str);
+			error_code = PTT_AUDIOBRIDGE_ERROR_NO_SUCH_ROOM;
+			g_snprintf(error_cause, 512, "No such room (%s)", room_id_str);
+			goto prepare_response;
+		}
+
+		/* Check if an announcement ID has been provided, or generate a random one */
+		json_t* id = json_object_get(root, "file_id");
+		const char* file_id = json_string_value(id);
+		gchar_ptr generated_file_id_ptr;
+		if(!file_id) {
+			/* Generate a random ID */
+			generated_file_id_ptr.reset(janus_random_uuid());
+			file_id = generated_file_id_ptr.get();
+			JANUS_LOG(LOG_VERB, "  -- Announcement ID: %s\n", file_id);
+		}
+
+		const char* filename = json_string_value(json_object_get(root, "filename"));
+		const gboolean unlink_on_stop = json_is_true(json_object_get(root, "unlink_on_stop"));
+		audiobridge->files_to_play.emplace_back(file_id, filename, unlink_on_stop);
+
+		/* Done, prepare response */
+		response = json_object();
+		json_object_set_new(response, "audiobridge", json_string("success"));
+		json_object_set_new(response, "room", json_string(room_id_str));
+		json_object_set_new(response, "file_id", json_string(file_id));
+
 		goto prepare_response;
 	} else if(!strcasecmp(request_text, "kick")) {
 		JANUS_LOG(LOG_VERB, "Attempt to kick a participant from an existing AudioBridge room\n");
@@ -2116,6 +2208,14 @@ void* message_handler_thread(void* data) {
 					janus_mutex_unlock(&rooms_mutex);
 					goto error;
 				}
+			}
+			if(!muting && audiobridge->playing_file) {
+				JANUS_LOG(LOG_ERR, "Room \"%s\" already playing file\n", participant->room->room_id_str);
+				error_code = PTT_AUDIOBRIDGE_ERROR_ROOM_ALREADY_PLAYING_FILE;
+				g_snprintf(error_cause, 512, "Room \"%s\" already playing file\n", participant->room->room_id_str);
+				janus_mutex_unlock(&audiobridge->mutex);
+				janus_mutex_unlock(&rooms_mutex);
+				goto error;
 			}
 
 			mute_participant(session, participant, muting, FALSE, TRUE);

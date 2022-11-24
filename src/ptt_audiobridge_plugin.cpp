@@ -127,6 +127,7 @@ GHashTable *rooms;
 janus_mutex rooms_mutex = JANUS_MUTEX_INITIALIZER;
 char *admin_key = NULL;
 gboolean lock_rtpfwd = TRUE;
+gboolean lock_playfile = TRUE;
 }
 
 
@@ -298,6 +299,9 @@ int plugin_init(janus_callbacks *callback, const char *config_path) {
 		janus_config_item *lrf = janus_config_get(config, config_general, janus_config_type_item, "lock_rtp_forward");
 		if(admin_key && lrf != NULL && lrf->value != NULL)
 			lock_rtpfwd = janus_is_true(lrf->value);
+		janus_config_item *lpf = janus_config_get(config, config_general, janus_config_type_item, "lock_play_file");
+		if(admin_key && lpf != NULL && lpf->value != NULL)
+			lock_playfile = janus_is_true(lpf->value);
 		janus_config_item *events = janus_config_get(config, config_general, janus_config_type_item, "events");
 		if(events != NULL && events->value != NULL)
 			notify_events = janus_is_true(events->value);

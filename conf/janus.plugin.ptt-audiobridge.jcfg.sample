@@ -32,6 +32,8 @@ general: {
 									# if this key is provided in the request
 	#lock_rtp_forward = true		# Whether the admin_key above should be
 									# enforced for RTP forwarding requests too
+	#lock_play_file = true			# Whether the admin_key above should be
+									# enforced for playing .opus files too
 	#events = false					# Whether events should be sent to event
 									# handlers (default=true)
 }

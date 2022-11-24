@@ -39,6 +39,7 @@ extern GAsyncQueue *messages;
 extern GHashTable* rooms;
 extern janus_mutex rooms_mutex;
 extern char* admin_key;
+extern gboolean lock_playfile;
 extern gboolean lock_rtpfwd;
 
 }

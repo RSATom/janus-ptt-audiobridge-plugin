@@ -9,9 +9,15 @@
 #include <cassert>
 #include <type_traits>
 
+#include <glib/gstdio.h>
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/time.h>
+
+extern "C" {
+#include "janus/apierror.h"
+}
 
 #include "constants.h"
 #include "ptt_audiobridge_plugin.h"
@@ -19,10 +25,45 @@
 #include "rtp_forwarder.h"
 #include "rtp_relay_packet.h"
 #include "janus_mutex_lock_guard.h"
+#include "opus_file.h"
 
 
 namespace ptt_audiobridge
 {
+
+enum {
+	max_rtp_size = 1500,
+	rtp_header_size = 12,
+};
+
+struct now_playing {
+	const file_info source_file;
+
+	now_playing(const file_info& source_file) :
+		source_file(source_file) {}
+	~now_playing() {
+		if(source_file.unlink_on_finish)
+			g_unlink(source_file.path.c_str());
+	}
+
+	bool open() {
+		return _file_reader.open(source_file.path);
+	}
+
+	bool is_readable() const {
+		return _file_reader.last_read_result() == opus_file::ReadResult::Success;
+	}
+
+	std::optional<const ogg_packet> read_next_packet() {
+		if(_file_reader.read_next_packet() == opus_file::ReadResult::Success) {
+			return _file_reader.last_read_packet();
+		}
+		return {};
+	}
+
+private:
+	opus_file _file_reader;
+};
 
 static void ptt_room_free(const janus_refcount *audiobridge_ref);
 
@@ -64,6 +105,61 @@ static void relay_rtp_packet(
 	// so let's restore it to original value for safety
 	rtp_header->timestamp = timestamp_save;
 	rtp_header->seq_number = seq_number_save;
+}
+
+// ptt_room::mutex should be locked
+void notify_participants(ptt_room* room, json_t* msg) {
+	GHashTableIter iter;
+	gpointer value;
+	g_hash_table_iter_init(&iter, room->participants);
+	while(!room->destroyed && g_hash_table_iter_next(&iter, NULL, &value)) {
+		room_participant *p = (room_participant *)value;
+		if(p && p->session) {
+			JANUS_LOG(LOG_VERB, "Notifying participant %s (%s)\n", p->user_id_str, p->display ? p->display : "??");
+			int ret = gateway->push_event(p->session->handle, &ptt_audiobridge_plugin, NULL, msg, NULL);
+			JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
+		}
+	}
+}
+
+// ptt_room::mutex should be locked
+static void notify_playback_started(ptt_room* room, const std::string& file_id) {
+	JANUS_LOG(LOG_INFO, "[%s] Playback started (%s)\n", room->room_id_str, file_id.c_str());
+	json_t *event = json_object();
+	json_object_set_new(event, "audiobridge", json_string("playback-started"));
+	json_object_set_new(event, "room", json_string(room->room_id_str));
+	json_object_set_new(event, "file_id", json_string(file_id.c_str()));
+	notify_participants(room, event);
+	json_decref(event);
+
+	/* Also notify event handlers */
+	if(notify_events && gateway->events_is_enabled()) {
+		json_t *info = json_object();
+		json_object_set_new(info, "event", json_string("playback-started"));
+		json_object_set_new(info, "room", json_string(room->room_id_str));
+		json_object_set_new(info, "file_id", json_string(file_id.c_str()));
+		gateway->notify_event(&ptt_audiobridge_plugin, NULL, info);
+	}
+}
+
+// ptt_room::mutex should be locked
+static void notify_playback_stopped(ptt_room* room, const std::string& file_id) {
+	JANUS_LOG(LOG_INFO, "[%s] Playback stopped (%s)\n", room->room_id_str, file_id.c_str());
+	json_t *event = json_object();
+	json_object_set_new(event, "audiobridge", json_string("playback-stopped"));
+	json_object_set_new(event, "room", json_string(room->room_id_str));
+	json_object_set_new(event, "file_id", json_string(file_id.c_str()));
+	notify_participants(room, event);
+	json_decref(event);
+
+	/* Also notify event handlers */
+	if(notify_events && gateway->events_is_enabled()) {
+		json_t *info = json_object();
+		json_object_set_new(info, "event", json_string("playback-stopped"));
+		json_object_set_new(info, "room", json_string(room->room_id_str));
+		json_object_set_new(info, "file_id", json_string(file_id.c_str()));
+		gateway->notify_event(&ptt_audiobridge_plugin, NULL, info);
+	}
 }
 
 static void update_rtp_header(
@@ -110,12 +206,17 @@ void* room_sender_thread(void* data) {
 	/* RTP */
 	guint16 seq = 0;
 	guint32 ts = 0;
+
+	char rtp_buffer[max_rtp_size];
+
 	/* SRTP buffer, if needed */
 	char sbuf[1500];
 
 	room_participant* unmuted_participant = nullptr;
 	std::string unmuted_participant_id;
 	std::unique_ptr<audio_recorder> recorder_ptr;
+
+	std::unique_ptr<now_playing> now_playing_ptr;
 
 	/* Loop */
 	int i=0;
@@ -144,7 +245,8 @@ void* room_sender_thread(void* data) {
 		janus_mutex_lock_nodebug(&audiobridge->mutex);
 		count = g_hash_table_size(audiobridge->participants);
 		rf_count = g_hash_table_size(audiobridge->rtp_forwarders);
-		if((count+rf_count) == 0) {
+		unsigned pf_count = audiobridge->files_to_play.size();
+		if((count + rf_count + pf_count) == 0) {
 			janus_mutex_unlock_nodebug(&audiobridge->mutex);
 			/* No participant and RTP forwarders, do nothing */
 			if(prev_count > 0) {
@@ -156,7 +258,8 @@ void* room_sender_thread(void* data) {
 		if(prev_count == 0) {
 			JANUS_LOG(LOG_INFO, "First user/forwarder/file just joined room %s, waking it up...\n", audiobridge->room_id_str);
 		}
-		prev_count = count+rf_count;
+		prev_count = count + rf_count + pf_count;
+
 		/* Update RTP header information */
 		seq++;
 		ts += OPUS_SAMPLES;
@@ -215,7 +318,39 @@ void* room_sender_thread(void* data) {
 			}
 		}
 
+		if(!unmuted_participant &&
+			!audiobridge->playing_file &&
+			!audiobridge->files_to_play.empty())
+		{
+			assert(!now_playing_ptr);
+
+			// it's time to start next file playback
+
+			memset(rtp_buffer, 0 , rtp_header_size); // to avoid side effects from previous use
+
+			now_playing_ptr = std::make_unique<now_playing>(audiobridge->files_to_play.front());
+			audiobridge->files_to_play.pop_front();
+
+			audiobridge->playing_file = true;
+			notify_playback_started(audiobridge, now_playing_ptr->source_file.id);
+
+			now_playing_ptr->open();
+		}
+
+		if(now_playing_ptr && !now_playing_ptr->is_readable()) {
+			assert(audiobridge->playing_file);
+
+			// it's time to stop file playback
+
+			audiobridge->playing_file = false;
+			notify_playback_stopped(audiobridge, now_playing_ptr->source_file.id);
+
+			now_playing_ptr.reset();
+		}
+
 		janus_mutex_unlock_nodebug(&audiobridge->mutex);
+
+		assert(!unmuted_participant || !now_playing_ptr);
 
 		if(unmuted_participant) {
 			janus_mutex_lock_guard inbuf_lock_guard(&unmuted_participant->qmutex);
@@ -317,6 +452,7 @@ void* room_sender_thread(void* data) {
 								plen = protected_;
 							}
 						}
+
 						/* No encryption, send the RTP packet as it is */
 						struct sockaddr *address = (forwarder->serv_addr.sin_family == AF_INET ?
 							(struct sockaddr *)&forwarder->serv_addr : (struct sockaddr *)&forwarder->serv_addr6);
@@ -334,6 +470,28 @@ void* room_sender_thread(void* data) {
 				pkt->data = NULL;
 				g_free(pkt);
 				pkt = NULL;
+			}
+		} else if(now_playing_ptr) {
+			if(std::optional<const ogg_packet> ogg_packet = now_playing_ptr->read_next_packet()) {
+				const gsize rtp_size = std::min<gsize>(ogg_packet->bytes + rtp_header_size, max_rtp_size);
+				memcpy(rtp_buffer + rtp_header_size, ogg_packet->packet, rtp_size - rtp_header_size);
+
+				janus_rtp_header* rtp_header = (janus_rtp_header*)(rtp_buffer);
+				update_rtp_header(rtp_header, audiobridge->room_ssrc, ts, seq);
+
+				ps = participants_list;
+				while(ps) {
+					room_participant *p = (room_participant *)ps->data;
+					if(g_atomic_int_get(&p->destroyed) || !p->session || !g_atomic_int_get(&p->session->started)) {
+						ps = ps->next;
+						continue;
+					}
+
+					rtp_header->type = p->opus_pt;
+					relay_rtp_packet(p, rtp_buffer, rtp_size);
+
+					ps = ps->next;
+				}
 			}
 		}
 
