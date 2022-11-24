@@ -220,6 +220,8 @@ void* room_sender_thread(void* data) {
 			if(recorder_ptr) recorder_ptr->save_frame(pkt->data, pkt->length);
 
 			if(pkt && !pkt->silence) {
+				update_rtp_header(pkt->data, audiobridge->room_ssrc, ts, seq);
+
 				/* Send packet to each participant (except self) */
 				ps = participants_list;
 				while(ps) {
@@ -229,13 +231,6 @@ void* room_sender_thread(void* data) {
 						continue;
 					}
 
-					pkt->length = pkt->length;
-					pkt->timestamp = ts;
-					pkt->seq_number = seq;
-					pkt->ssrc = audiobridge->room_ssrc;
-					pkt->silence = FALSE;
-					pkt->data->version = 2;
-					pkt->data->markerbit = 0;	/* FIXME Should be 1 for the first packet */
 					relay_rtp_packet(p, p->session, pkt);
 
 					ps = ps->next;
