@@ -53,6 +53,30 @@ static void relay_rtp_packet(
 	packet->data->seq_number = htons(packet->seq_number);
 }
 
+static void update_rtp_header(
+	janus_rtp_header* rtp_header,
+	uint32_t ssrc,
+	uint32_t timestamp,
+	uint16_t seq_number)
+{
+	rtp_header->version = 2;
+	rtp_header->markerbit = 0; /* FIXME Should be 1 for the first packet */
+	rtp_header->seq_number = htons(seq_number);
+	rtp_header->timestamp = htonl(timestamp);
+	rtp_header->ssrc = htonl(ssrc);
+}
+
+static void update_rtp_header(
+	janus_rtp_header* rtp_header,
+	uint8_t payload_type,
+	uint32_t ssrc,
+	uint32_t timestamp,
+	uint16_t seq_number)
+{
+	rtp_header->type = payload_type;
+	update_rtp_header(rtp_header, ssrc, timestamp, seq_number);
+}
+
 void* room_sender_thread(void* data) {
 	JANUS_LOG(LOG_VERB, "Audio bridge thread starting...\n");
 	ptt_room *audiobridge = (ptt_room *)data;
