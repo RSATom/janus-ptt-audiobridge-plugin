@@ -87,10 +87,6 @@ void* room_sender_thread(void* data) {
 	JANUS_LOG(LOG_VERB, "Thread is for room %s (%s)...\n",
 		audiobridge->room_id_str, audiobridge->room_name);
 
-	/* Base RTP packets, in case there are forwarders involved */
-	const gsize max_rtp_size = 1500;
-	unsigned char *rtpbuffer = (unsigned char *)g_malloc0(max_rtp_size);
-
 	/* Timer */
 	struct timeval now, before;
 	gettimeofday(&before, NULL);
@@ -266,9 +262,6 @@ void* room_sender_thread(void* data) {
 					go_on = TRUE;
 				}
 				if(go_on) {
-					const gsize rtp_size = std::min<gsize>(pkt->length, max_rtp_size);
-					memcpy(rtpbuffer, pkt->data, rtp_size);
-
 					GHashTableIter iter;
 					gpointer key, value;
 					g_hash_table_iter_init(&iter, audiobridge->rtp_forwarders);
@@ -278,18 +271,19 @@ void* room_sender_thread(void* data) {
 						if(count == 0 && !forwarder->always_on)
 							continue;
 
-						janus_rtp_header *rtph = (janus_rtp_header *)(rtpbuffer);
-						rtph->version = 2;
-						/* Update header */
-						rtph->type = forwarder->payload_type;
-						rtph->ssrc = htonl(forwarder->ssrc ? forwarder->ssrc : stream_id);
 						forwarder->seq_number++;
-						rtph->seq_number = htons(forwarder->seq_number);
 						forwarder->timestamp += OPUS_SAMPLES;
-						rtph->timestamp = htonl(forwarder->timestamp);
+
+						update_rtp_header(
+							pkt->data,
+							forwarder->payload_type,
+							forwarder->ssrc ? forwarder->ssrc : stream_id,
+							forwarder->timestamp,
+							forwarder->seq_number);
+
 						/* Check if this packet needs to be encrypted */
-						char *payload = (char *)rtph;
-						int plen = rtp_size;
+						char* payload = (char *)pkt->data;
+						int plen = pkt->length;
 						if(forwarder->is_srtp) {
 							memcpy(sbuf, payload, plen);
 							int protected_ = plen;
@@ -334,7 +328,7 @@ void* room_sender_thread(void* data) {
 		g_list_free(participants_list);
 
 	}
-	g_free(rtpbuffer);
+
 	JANUS_LOG(LOG_VERB, "Leaving sender thread for room %s (%s)...\n", audiobridge->room_id_str, audiobridge->room_name);
 
 	janus_refcount_decrease(audiobridge);
