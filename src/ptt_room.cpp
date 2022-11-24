@@ -207,15 +207,20 @@ void* room_sender_thread(void* data) {
 		janus_mutex_unlock_nodebug(&audiobridge->mutex);
 
 		if(unmuted_participant) {
-			room_participant *p = unmuted_participant;
-			janus_mutex_lock_guard inbuf_lock_guard(&p->qmutex);
-			if(g_atomic_int_get(&p->destroyed) || !p->session || !g_atomic_int_get(&p->session->started) || !g_atomic_int_get(&p->active) || p->prebuffering || !p->inbuf) {
+			janus_mutex_lock_guard inbuf_lock_guard(&unmuted_participant->qmutex);
+			if(g_atomic_int_get(&unmuted_participant->destroyed) ||
+				!unmuted_participant->session ||
+				!g_atomic_int_get(&unmuted_participant->session->started) ||
+				!g_atomic_int_get(&unmuted_participant->active) ||
+				unmuted_participant->prebuffering ||
+				!unmuted_participant->inbuf)
+			{
 				continue;
 			}
 
-			GList *peek = g_list_first(p->inbuf);
-			rtp_relay_packet *pkt = (rtp_relay_packet *)(peek ? peek->data : NULL);
-			p->inbuf = g_list_delete_link(p->inbuf, peek);
+			GList* peek = g_list_first(unmuted_participant->inbuf);
+			rtp_relay_packet* pkt = (rtp_relay_packet *)(peek ? peek->data : NULL);
+			unmuted_participant->inbuf = g_list_delete_link(unmuted_participant->inbuf, peek);
 
 			inbuf_lock_guard.unlock();
 
