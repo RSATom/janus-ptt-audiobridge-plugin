@@ -232,8 +232,12 @@ void* room_sender_thread(void* data) {
 				/* Send packet to each participant (except self) */
 				ps = participants_list;
 				while(ps) {
-					room_participant *p = (room_participant *)ps->data;
-					if(g_atomic_int_get(&p->destroyed) || !p->session || !g_atomic_int_get(&p->session->started) || p == unmuted_participant) {
+					room_participant* p = (room_participant*)ps->data;
+					if(g_atomic_int_get(&p->destroyed) ||
+						!p->session ||
+						!g_atomic_int_get(&p->session->started) ||
+						p == unmuted_participant)
+					{
 						ps = ps->next;
 						continue;
 					}
