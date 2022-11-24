@@ -40,6 +40,8 @@ static void relay_rtp_packet(
 {
 	/* Set the payload type */
 	packet->data->type = participant->opus_pt;
+	const auto timestamp_save = packet->data->timestamp;
+	const auto seq_number_save = packet->data->seq_number;
 	/* Fix sequence number and timestamp (room switching may be involved) */
 	janus_rtp_header_update(packet->data, &participant->context, FALSE, 0);
 	if(gateway != NULL) {
@@ -49,8 +51,8 @@ static void relay_rtp_packet(
 		gateway->relay_rtp(session->handle, &rtp);
 	}
 	/* Restore the timestamp and sequence number to what the sender set them to */
-	packet->data->timestamp = htonl(packet->timestamp);
-	packet->data->seq_number = htons(packet->seq_number);
+	packet->data->timestamp = timestamp_save;
+	packet->data->seq_number = seq_number_save;
 }
 
 static void update_rtp_header(
