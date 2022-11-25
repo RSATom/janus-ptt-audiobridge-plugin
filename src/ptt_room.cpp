@@ -208,9 +208,7 @@ void* room_sender_thread(void* data) {
 	guint32 ts = 0;
 
 	char rtp_buffer[max_rtp_size];
-
-	/* SRTP buffer, if needed */
-	char sbuf[1500];
+	char srtp_buffer[1500];
 
 	room_participant* unmuted_participant = nullptr;
 	std::string unmuted_participant_id;
@@ -438,17 +436,17 @@ void* room_sender_thread(void* data) {
 						char* payload = (char *)pkt->data;
 						int plen = pkt->length;
 						if(forwarder->is_srtp) {
-							memcpy(sbuf, payload, plen);
+							memcpy(srtp_buffer, payload, plen);
 							int protected_ = plen;
-							int res = srtp_protect(forwarder->srtp_ctx, sbuf, &protected_);
+							int res = srtp_protect(forwarder->srtp_ctx, srtp_buffer, &protected_);
 							if(res != srtp_err_status_ok) {
-								janus_rtp_header *header = (janus_rtp_header *)sbuf;
+								janus_rtp_header *header = (janus_rtp_header *)srtp_buffer;
 								guint32 timestamp = ntohl(header->timestamp);
 								guint16 seq = ntohs(header->seq_number);
 								JANUS_LOG(LOG_ERR, "Error encrypting RTP packet for room %s... %s (len=%d-->%d, ts=%" SCNu32 ", seq=%" SCNu16 ")...\n",
 									audiobridge->room_id_str, janus_srtp_error_str(res), plen, protected_, timestamp, seq);
 							} else {
-								payload = (char *)&sbuf;
+								payload = (char *)&srtp_buffer;
 								plen = protected_;
 							}
 						}
