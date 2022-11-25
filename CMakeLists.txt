@@ -35,6 +35,7 @@ file(GLOB SOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
     README.md)
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${JANUS_INCLUDE_PATH}
     ${JANUS_INCLUDE_PATH}/janus/

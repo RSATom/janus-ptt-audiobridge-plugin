@@ -48,6 +48,7 @@ parts:
       - libglib2.0-dev
       - libjansson-dev
       - libopus-dev
+      - libogg-dev
       - libssl-dev
     stage-snaps:
       - janus-gateway

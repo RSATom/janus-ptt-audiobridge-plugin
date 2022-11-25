@@ -8,6 +8,7 @@
 
 #include <cassert>
 #include <type_traits>
+#include <optional>
 
 #include <glib/gstdio.h>
 
