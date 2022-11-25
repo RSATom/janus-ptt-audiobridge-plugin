@@ -88,6 +88,8 @@ void mute_participant(
 	json_t *pub = json_object();
 	json_object_set_new(pub, "audiobridge", participant->muted ? json_string("muted") : json_string("unmuted"));
 	json_object_set_new(pub, "room", json_string(participant->room->room_id_str));
+	if(!participant->muted && audiobridge->mjrs)
+		json_object_set_new(pub, "recording_id", json_string(participant->recording_id.c_str()));
 	json_object_set(pub, "participant", participantInfo);
 
 	GHashTableIter iter;
@@ -111,6 +113,8 @@ void mute_participant(
 		json_t *info = json_object();
 		json_object_set_new(info, "event", participant->muted ? json_string("muted") : json_string("unmuted"));
 		json_object_set_new(info, "room", json_string(audiobridge->room_id_str));
+		if(!participant->muted && audiobridge->mjrs)
+			json_object_set_new(pub, "recording_id", json_string(participant->recording_id.c_str()));
 		json_object_set(info, "participant", participantInfo);
 
 		gateway->notify_event(&ptt_audiobridge_plugin, session ? session->handle : NULL, info);
