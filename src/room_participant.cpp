@@ -17,6 +17,7 @@ extern "C" {
 #include "ptt_room.h"
 #include "rtp_relay_packet.h"
 #include "glib_ptr.h"
+#include "json_ptr.h"
 
 
 namespace ptt_audiobridge
@@ -40,12 +41,12 @@ std::string generate_recording_id(room_participant* participant) {
 	gchar_ptr escaped_participant_id_ptr(g_uri_escape_string(participant->user_id_str, nullptr, false));
 	gchar_ptr uuid_ptr(janus_random_uuid());
 
-	std::string recording_id;
-	recording_id += std::string(room->room_id_str) + G_DIR_SEPARATOR_S;
-	recording_id += std::string(participant->user_id_str) + G_DIR_SEPARATOR_S;
-	recording_id += std::to_string(now) + "-" +uuid_ptr.get() + "-audio";
+	std::string id;
+	id += std::string(room->room_id_str) + G_DIR_SEPARATOR_S;
+	id += std::string(participant->user_id_str) + G_DIR_SEPARATOR_S;
+	id += std::to_string(now) + "-" +uuid_ptr.get() + "-audio";
 
-	return recording_id;
+	return id;
 }
 
 // ptt_room::mutex should be locked
@@ -64,15 +65,18 @@ void mute_participant(
 	JANUS_LOG(LOG_INFO, "Setting muted property: %s (room %s, user %s)\n",
 		mute ? "true" : "false", participant->room->room_id_str, participant->user_id_str);
 	participant->muted = mute;
+	json_ptr json_ptt_id_ptr;
 	if(participant->muted) {
 		audiobridge->unmuted_participant = nullptr;
 
-		participant->recording_id.clear();
+		json_ptt_id_ptr.reset(json_string(participant->ptt_id.c_str()));
+		participant->ptt_id.clear();
 
 		/* Clear the queued packets waiting to be handled */
 		clear_inbuf(participant, lock_qmutex);
 	} else {
-		participant->recording_id = generate_recording_id(participant);
+		participant->ptt_id = generate_recording_id(participant);
+		json_ptt_id_ptr.reset(json_string(participant->ptt_id.c_str()));
 
 		gint64 now = janus_get_monotonic_time();
 		audiobridge->unmuted_participant = participant;
@@ -88,8 +92,7 @@ void mute_participant(
 	json_t *pub = json_object();
 	json_object_set_new(pub, "audiobridge", participant->muted ? json_string("muted") : json_string("unmuted"));
 	json_object_set_new(pub, "room", json_string(participant->room->room_id_str));
-	if(!participant->muted && audiobridge->mjrs)
-		json_object_set_new(pub, "recording_id", json_string(participant->recording_id.c_str()));
+	json_object_set(pub, "ptt_id", json_ptt_id_ptr.get());
 	json_object_set(pub, "participant", participantInfo);
 
 	GHashTableIter iter;
@@ -113,8 +116,7 @@ void mute_participant(
 		json_t *info = json_object();
 		json_object_set_new(info, "event", participant->muted ? json_string("muted") : json_string("unmuted"));
 		json_object_set_new(info, "room", json_string(audiobridge->room_id_str));
-		if(!participant->muted && audiobridge->mjrs)
-			json_object_set_new(pub, "recording_id", json_string(participant->recording_id.c_str()));
+		json_object_set(info, "ptt_id", json_ptt_id_ptr.get());
 		json_object_set(info, "participant", participantInfo);
 
 		gateway->notify_event(&ptt_audiobridge_plugin, session ? session->handle : NULL, info);

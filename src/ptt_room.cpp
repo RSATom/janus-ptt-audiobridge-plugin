@@ -295,14 +295,15 @@ void* room_sender_thread(void* data) {
 			else
 				unmuted_participant_id.clear();
 
+			assert(!unmuted_participant || !unmuted_participant->ptt_id.empty());
 			if(audiobridge->mjrs && audiobridge->mjrs_dir &&
-				unmuted_participant && !unmuted_participant->recording_id.empty())
+				unmuted_participant && !unmuted_participant->ptt_id.empty())
 			{
 				std::string recording_path = audiobridge->mjrs_dir;
 				if(recording_path.back() != G_DIR_SEPARATOR) {
 					recording_path += G_DIR_SEPARATOR_S;
 				}
-				recording_path += unmuted_participant->recording_id;
+				recording_path += unmuted_participant->ptt_id;
 				recording_path += ".mjr";
 
 				recorder_ptr = std::make_unique<audio_recorder>(recording_path, janus_audiocodec_name(JANUS_AUDIOCODEC_OPUS));

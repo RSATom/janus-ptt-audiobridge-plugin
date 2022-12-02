@@ -2223,9 +2223,7 @@ void* message_handler_thread(void* data) {
 			event = json_object();
 			json_object_set_new(event, "audiobridge", json_string("event"));
 			json_object_set_new(event, "result", json_string("ok"));
-			if(audiobridge->mjrs && !muting) {
-				json_object_set_new(event, "recording_id", json_string(participant->recording_id.c_str()));
-			}
+			json_object_set(event, "ptt_id", json_string(participant->ptt_id.c_str()));
 
 			janus_mutex_unlock(&audiobridge->mutex);
 			janus_mutex_unlock(&rooms_mutex);
