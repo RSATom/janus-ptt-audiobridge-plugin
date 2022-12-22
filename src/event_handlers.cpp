@@ -27,6 +27,7 @@ extern "C" {
 #include "room_message.h"
 #include "janus_mutex_lock_guard.h"
 #include "glib_ptr.h"
+#include "json_ptr.h"
 
 
 /* Parameter validation */
@@ -2218,12 +2219,17 @@ void* message_handler_thread(void* data) {
 				goto error;
 			}
 
+			json_ptr json_ptt_id_ptr;
+			if(muting)
+				json_ptt_id_ptr.reset(json_string(participant->ptt_id.c_str()));
 			mute_participant(session, participant, muting, FALSE, TRUE);
+			if(!muting)
+				json_ptt_id_ptr.reset(json_string(participant->ptt_id.c_str()));
 
 			event = json_object();
 			json_object_set_new(event, "audiobridge", json_string("event"));
 			json_object_set_new(event, "result", json_string("ok"));
-			json_object_set_new(event, "ptt_id", json_string(participant->ptt_id.c_str()));
+			json_object_set_new(event, "ptt_id", json_ptt_id_ptr.release());
 
 			janus_mutex_unlock(&audiobridge->mutex);
 			janus_mutex_unlock(&rooms_mutex);
