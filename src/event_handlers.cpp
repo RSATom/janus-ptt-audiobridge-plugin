@@ -2166,11 +2166,12 @@ void* message_handler_thread(void* data) {
 				goto error;
 			}
 
+			const gboolean muting = strcasecmp(request_text, "self-mute") == str_equal;
+
 			janus_mutex_lock(&rooms_mutex);
 			ptt_room *audiobridge = participant->room;
 			janus_mutex_lock(&audiobridge->mutex);
 
-			const gboolean muting = !strcasecmp(request_text, "self-mute");
 			if(!muting && audiobridge->unmuted_participant && audiobridge->unmuted_participant != participant) {
 				// check if unmuted_participant was not active for too long time
 				gboolean mute_forced = FALSE;
