@@ -39,6 +39,7 @@ struct room_participant: public janus_refcount {
 	gint64 unmuted_timestamp;
 
 	std::string ptt_id; // absolutely(?) unique id of PTT
+	std::string ptt_opaque;
 
 	gchar *user_id_str;		/* Unique ID in the room (when using strings) */
 	gchar *display;			/* Display name (opaque value, only meaningful to application) */

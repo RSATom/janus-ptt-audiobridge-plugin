@@ -18,6 +18,7 @@ extern "C" {
 }
 
 #include "constants.h"
+#include "helpers.h"
 #include "ptt_audiobridge_plugin.h"
 #include "plugin_session.h"
 #include "ptt_room.h"
@@ -118,6 +119,10 @@ static struct janus_json_parameter play_file_parameters[] = {
 	{"filename", JSON_STRING, JANUS_JSON_PARAM_REQUIRED},
 	{"file_id", JSON_STRING, 0},
 	{"unlink_on_stop", JANUS_JSON_BOOL, 0}
+};
+
+static struct janus_json_parameter self_unmute_parameters[] = {
+	{"opaque", JSON_STRING, 0}
 };
 
 namespace ptt_audiobridge
@@ -2168,6 +2173,14 @@ void* message_handler_thread(void* data) {
 
 			const gboolean muting = strcasecmp(request_text, "self-mute") == str_equal;
 
+			if(!muting) {
+				JANUS_VALIDATE_JSON_OBJECT(root, self_unmute_parameters,
+					error_code, error_cause, TRUE,
+					PTT_AUDIOBRIDGE_ERROR_MISSING_ELEMENT, PTT_AUDIOBRIDGE_ERROR_INVALID_ELEMENT);
+				if(error_code != 0)
+					goto error;
+			}
+
 			janus_mutex_lock(&rooms_mutex);
 			ptt_room *audiobridge = participant->room;
 			janus_mutex_lock(&audiobridge->mutex);
@@ -2223,6 +2236,13 @@ void* message_handler_thread(void* data) {
 			json_ptr json_ptt_id_ptr;
 			if(muting)
 				json_ptt_id_ptr.reset(json_string(participant->ptt_id.c_str()));
+			else {
+				assert(participant->ptt_opaque.empty());
+				json_t* json_opaque = json_object_get(root, "opaque");
+				if(const char* opaque = json_opaque ? json_string_value(json_opaque) : nullptr) {
+					participant->ptt_opaque = opaque;
+				}
+			}
 			mute_participant(session, participant, muting, FALSE, TRUE);
 			if(!muting)
 				json_ptt_id_ptr.reset(json_string(participant->ptt_id.c_str()));
