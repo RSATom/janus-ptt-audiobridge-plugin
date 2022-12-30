@@ -35,6 +35,7 @@ struct room_participant: public janus_refcount {
 
 	// changing only when ptt_room::mutex is locked
 	ptt_room *room;	/* Room */
+	std::string opaque;
 	gboolean muted;			/* Whether this participant is muted */
 	gint64 unmuted_timestamp;
 

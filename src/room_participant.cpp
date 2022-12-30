@@ -90,6 +90,7 @@ void mute_participant(
 	/* Notify all other participants about the mute/unmute */
 	json_t *participantInfo = json_object();
 	json_object_set_new(participantInfo, "id", json_string(participant->user_id_str));
+	json_object_set_new(participantInfo, "opaque", json_string(participant->opaque.c_str()));
 	if(participant->display)
 		json_object_set_new(participantInfo, "display", json_string(participant->display));
 

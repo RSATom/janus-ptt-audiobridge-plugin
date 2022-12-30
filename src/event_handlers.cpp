@@ -91,7 +91,8 @@ static struct janus_json_parameter join_parameters[] = {
 	{"prebuffer", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"audio_level_average", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
 	{"audio_active_packets", JSON_INTEGER, JANUS_JSON_PARAM_POSITIVE},
-	{"secret", JSON_STRING, 0}
+	{"secret", JSON_STRING, 0},
+	{"opaque", JSON_STRING, 0}
 };
 static struct janus_json_parameter mjrs_parameters[] = {
 	{"mjrs", JANUS_JSON_BOOL, JANUS_JSON_PARAM_REQUIRED},
@@ -1915,6 +1916,8 @@ void* message_handler_thread(void* data) {
 				}
 				admin = TRUE;
 			}
+			json_t* opaque = json_object_get(root, "opaque");
+			const char* opaque_text = opaque ? json_string_value(opaque) : "";
 			json_t *display = json_object_get(root, "display");
 			const char *display_text = display ? json_string_value(display) : NULL;
 			json_t *prebuffer = json_object_get(root, "prebuffer");
@@ -1963,6 +1966,7 @@ void* message_handler_thread(void* data) {
 			participant->user_id_str = g_strdup(user_id_str);
 			g_free(participant->display);
 			participant->admin = admin;
+			participant->opaque = opaque_text;
 			participant->display = display_text ? g_strdup(display_text) : NULL;
 			participant->muted = TRUE;	/* By default, everyone's muted when joining */
 			participant->prebuffer_count = prebuffer_count;
@@ -2042,6 +2046,7 @@ void* message_handler_thread(void* data) {
 				json_object_set_new(info, "event", json_string("joined"));
 				json_object_set_new(info, "room", json_string(room_id_str));
 				json_object_set_new(info, "id", json_string(user_id_str));
+				json_object_set_new(info, "opaque", json_string(participant->opaque.c_str()));
 				json_object_set_new(info, "display", json_string(participant->display));
 				json_object_set_new(info, "setup", g_atomic_int_get(&participant->session->started) ? json_true() : json_false());
 				json_object_set_new(info, "muted", participant->muted ? json_true() : json_false());
@@ -2151,6 +2156,7 @@ void* message_handler_thread(void* data) {
 				json_object_set_new(info, "event", json_string("configured"));
 				json_object_set_new(info, "room", json_string(audiobridge->room_id_str));
 				json_object_set_new(info, "id", json_string(participant->user_id_str));
+				json_object_set_new(info, "opaque", json_string(participant->opaque.c_str()));
 				json_object_set_new(info, "display", json_string(participant->display));
 				json_object_set_new(info, "muted", participant->muted ? json_true() : json_false());
 				gateway->notify_event(&ptt_audiobridge_plugin, session->handle, info);
@@ -2325,6 +2331,8 @@ void* message_handler_thread(void* data) {
 				}
 				admin = TRUE;
 			}
+			json_t* opaque = json_object_get(root, "opaque");
+			const char* opaque_text = opaque ? json_string_value(opaque) : "";
 			json_t *display = json_object_get(root, "display");
 			const char *display_text = display ? json_string_value(display) : NULL;
 			char *user_id_str = NULL;
@@ -2414,6 +2422,7 @@ void* message_handler_thread(void* data) {
 			assert(user_id_str);
 			participant->user_id_str = g_strdup(user_id_str);
 			participant->admin = admin;
+			participant->opaque = opaque_text;
 			g_free(participant->display);
 			participant->display = display_text ? g_strdup(display_text) : NULL;
 			participant->room = audiobridge;
@@ -2475,6 +2484,7 @@ void* message_handler_thread(void* data) {
 				json_object_set_new(info, "event", json_string("joined"));
 				json_object_set_new(info, "room", json_string(audiobridge->room_id_str));
 				json_object_set_new(info, "id", json_string(participant->user_id_str));
+				json_object_set_new(info, "opaque", json_string(participant->opaque.c_str()));
 				json_object_set_new(info, "display", json_string(participant->display));
 				json_object_set_new(info, "muted", participant->muted ? json_true() : json_false());
 				gateway->notify_event(&ptt_audiobridge_plugin, session->handle, info);
