@@ -1957,13 +1957,6 @@ void* message_handler_thread(void* data) {
 				participant = room_participant::create();
 				g_atomic_int_set(&participant->active, 0);
 				participant->prebuffering = TRUE;
-				participant->display = NULL;
-				participant->inbuf = NULL;
-				participant->last_drop = 0;
-				participant->fec = FALSE;
-				participant->expected_seq = 0;
-				participant->probation = 0;
-				participant->last_timestamp = 0;
 			}
 			participant->session = session;
 			participant->room = audiobridge;
