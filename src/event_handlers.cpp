@@ -729,7 +729,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			goto prepare_response;
 		json_t *mjrs = json_object_get(root, "mjrs");
 		json_t *mjrsdir = json_object_get(root, "mjrs_dir");
-		gboolean mjrs_active = json_is_true(mjrs);
+		const gboolean mjrs_active = json_is_true(mjrs);
 		JANUS_LOG(LOG_VERB, "Enable MJR recording: %d\n", (mjrs_active ? 1 : 0));
 		/* Lookup room */
 		janus_mutex_lock(&rooms_mutex);
@@ -744,7 +744,6 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 		janus_mutex_unlock(&rooms_mutex);
 		janus_mutex_lock(&audiobridge->mutex);
 		/* Set MJR recording status */
-		gboolean room_prev_mjrs_active = mjrs_active;
 		if(mjrs_active && mjrsdir) {
 			/* Update the path where to save the MJR files */
 			char *old_mjrs_dir = audiobridge->mjrs_dir;
@@ -752,9 +751,9 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			audiobridge->mjrs_dir = new_mjrs_dir;
 			g_free(old_mjrs_dir);
 		}
-		if(room_prev_mjrs_active != audiobridge->mjrs) {
+		if(mjrs_active != audiobridge->mjrs) {
 			/* Room recording state has changed */
-			audiobridge->mjrs = room_prev_mjrs_active;
+			audiobridge->mjrs = mjrs_active;
 		}
 		janus_mutex_unlock(&audiobridge->mutex);
 		janus_refcount_decrease(audiobridge);
