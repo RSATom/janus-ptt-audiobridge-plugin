@@ -41,7 +41,6 @@ general: {
 room-1234: {
 	description = "Demo Room"
 	secret = "adminpwd"
-	sampling_rate = 16000
 	# mjrs = true
 	# mjrs_dir = "/path/to/"
 }
