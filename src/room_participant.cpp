@@ -72,13 +72,15 @@ void mute_participant(
 
 		json_ptt_id_ptr.reset(json_string(participant->ptt_id.c_str()));
 		participant->ptt_id.clear();
-		json_ptt_opaque_ptr.reset(json_string(participant->ptt_opaque.c_str()));
+		if(!participant->ptt_opaque.empty())
+			json_ptt_opaque_ptr.reset(json_string(participant->ptt_opaque.c_str()));
 		participant->ptt_opaque.clear();
 
 		/* Clear the queued packets waiting to be handled */
 		clear_inbuf(participant, lock_qmutex);
 	} else {
-		json_ptt_opaque_ptr.reset(json_string(participant->ptt_opaque.c_str()));
+		if(!participant->ptt_opaque.empty())
+			json_ptt_opaque_ptr.reset(json_string(participant->ptt_opaque.c_str()));
 		participant->ptt_id = generate_recording_id(participant);
 		json_ptt_id_ptr.reset(json_string(participant->ptt_id.c_str()));
 
@@ -90,7 +92,8 @@ void mute_participant(
 	/* Notify all other participants about the mute/unmute */
 	json_t *participantInfo = json_object();
 	json_object_set_new(participantInfo, "id", json_string(participant->user_id_str));
-	json_object_set_new(participantInfo, "opaque", json_string(participant->opaque.c_str()));
+	if(!participant->opaque.empty())
+		json_object_set_new(participantInfo, "opaque", json_string(participant->opaque.c_str()));
 	if(participant->display)
 		json_object_set_new(participantInfo, "display", json_string(participant->display));
 
@@ -98,7 +101,8 @@ void mute_participant(
 	json_object_set_new(pub, "audiobridge", participant->muted ? json_string("muted") : json_string("unmuted"));
 	json_object_set_new(pub, "room", json_string(participant->room->room_id_str));
 	json_object_set(pub, "ptt_id", json_ptt_id_ptr.get());
-	json_object_set(pub, "ptt_opaque", json_ptt_opaque_ptr.get());
+	if(json_ptt_opaque_ptr)
+		json_object_set(pub, "ptt_opaque", json_ptt_opaque_ptr.get());
 	json_object_set(pub, "participant", participantInfo);
 
 	GHashTableIter iter;
@@ -123,7 +127,8 @@ void mute_participant(
 		json_object_set_new(info, "event", participant->muted ? json_string("muted") : json_string("unmuted"));
 		json_object_set_new(info, "room", json_string(audiobridge->room_id_str));
 		json_object_set(info, "ptt_id", json_ptt_id_ptr.get());
-		json_object_set(info, "ptt_opaque", json_ptt_opaque_ptr.get());
+		if(json_ptt_opaque_ptr)
+			json_object_set(info, "ptt_opaque", json_ptt_opaque_ptr.get());
 		json_object_set(info, "participant", participantInfo);
 
 		gateway->notify_event(&ptt_audiobridge_plugin, session ? session->handle : NULL, info);

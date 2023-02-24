@@ -2071,7 +2071,8 @@ void* message_handler_thread(void* data) {
 				json_object_set_new(info, "event", json_string("joined"));
 				json_object_set_new(info, "room", json_string(room_id_str));
 				json_object_set_new(info, "id", json_string(user_id_str));
-				json_object_set_new(info, "opaque", json_string(participant->opaque.c_str()));
+				if(!participant->opaque.empty())
+					json_object_set_new(info, "opaque", json_string(participant->opaque.c_str()));
 				json_object_set_new(info, "display", json_string(participant->display));
 				json_object_set_new(info, "setup", g_atomic_int_get(&participant->session->started) ? json_true() : json_false());
 				json_object_set_new(info, "muted", participant->muted ? json_true() : json_false());
@@ -2181,7 +2182,8 @@ void* message_handler_thread(void* data) {
 				json_object_set_new(info, "event", json_string("configured"));
 				json_object_set_new(info, "room", json_string(audiobridge->room_id_str));
 				json_object_set_new(info, "id", json_string(participant->user_id_str));
-				json_object_set_new(info, "opaque", json_string(participant->opaque.c_str()));
+				if(!participant->opaque.empty())
+					json_object_set_new(info, "opaque", json_string(participant->opaque.c_str()));
 				json_object_set_new(info, "display", json_string(participant->display));
 				json_object_set_new(info, "muted", participant->muted ? json_true() : json_false());
 				gateway->notify_event(&ptt_audiobridge_plugin, session->handle, info);
@@ -2509,7 +2511,8 @@ void* message_handler_thread(void* data) {
 				json_object_set_new(info, "event", json_string("joined"));
 				json_object_set_new(info, "room", json_string(audiobridge->room_id_str));
 				json_object_set_new(info, "id", json_string(participant->user_id_str));
-				json_object_set_new(info, "opaque", json_string(participant->opaque.c_str()));
+				if(!participant->opaque.empty())
+					json_object_set_new(info, "opaque", json_string(participant->opaque.c_str()));
 				json_object_set_new(info, "display", json_string(participant->display));
 				json_object_set_new(info, "muted", participant->muted ? json_true() : json_false());
 				gateway->notify_event(&ptt_audiobridge_plugin, session->handle, info);
