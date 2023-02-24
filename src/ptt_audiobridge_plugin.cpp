@@ -48,6 +48,7 @@ extern "C" {
 #include "record.h"
 #include "thread_type.h"
 #include "janus_mutex_lock_guard.h"
+#include "recordings_cleanup.h"
 using namespace ptt_audiobridge;
 
 /* Plugin methods */
@@ -128,6 +129,7 @@ janus_mutex rooms_mutex = JANUS_MUTEX_INITIALIZER;
 char *admin_key = NULL;
 gboolean lock_rtpfwd = TRUE;
 gboolean lock_playfile = TRUE;
+unsigned recordings_ttl = 0;
 }
 
 
@@ -308,6 +310,10 @@ int plugin_init(janus_callbacks *callback, const char *config_path) {
 		if(!notify_events && callback->events_is_enabled()) {
 			JANUS_LOG(LOG_WARN, "Notification of events to handlers disabled for %s\n", PTT_AUDIOBRIDGE_NAME);
 		}
+		janus_config_item* recordings_ttl = janus_config_get(config, config_general, janus_config_type_item, "recordings_ttl");
+		if(recordings_ttl && recordings_ttl->value) {
+			init_recordings_cleanup(atol(recordings_ttl->value));
+		}
 	}
 
 	/* Iterate on all rooms */
@@ -440,6 +446,9 @@ int plugin_init(janus_callbacks *callback, const char *config_path) {
 					(gpointer)g_strdup(audiobridge->room_id_str),
 					audiobridge);
 				janus_mutex_unlock(&rooms_mutex);
+
+				if(audiobridge->mjrs && audiobridge->mjrs_dir)
+					add_recordings_dir(audiobridge->mjrs_dir);
 			}
 			cl = cl->next;
 		}
@@ -514,6 +523,8 @@ void plugin_destroy(void) {
 
 	janus_config_destroy(config);
 	g_free(admin_key);
+
+	destroy_recordings_cleanup();
 
 	g_atomic_int_set(&initialized, 0);
 	g_atomic_int_set(&stopping, 0);

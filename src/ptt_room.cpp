@@ -27,6 +27,7 @@ extern "C" {
 #include "rtp_relay_packet.h"
 #include "janus_mutex_lock_guard.h"
 #include "opus_file.h"
+#include "recordings_cleanup.h"
 
 
 namespace ptt_audiobridge
@@ -548,6 +549,9 @@ static void ptt_room_free(const janus_refcount *audiobridge_ref) {
 	ptt_room *audiobridge =
 		const_cast<ptt_room*>( // yes, I know, it's ugly, but I can do nothing atm
 			static_cast<const ptt_room*>(audiobridge_ref));
+
+	if(audiobridge->mjrs && audiobridge->mjrs_dir)
+		remove_recordings_dir(audiobridge->mjrs_dir);
 
 	/* This room can be destroyed, free all the resources */
 	g_free(audiobridge->room_id_str);

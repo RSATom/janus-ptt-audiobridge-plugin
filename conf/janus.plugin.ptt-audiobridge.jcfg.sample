@@ -36,6 +36,7 @@ general: {
 									# enforced for playing .opus files too
 	#events = false					# Whether events should be sent to event
 									# handlers (default=true)
+	recordings_ttl = 3600			# If set, recording (.mjr) will be removed from disk after specified amount of seconds of existance
 }
 
 room-1234: {

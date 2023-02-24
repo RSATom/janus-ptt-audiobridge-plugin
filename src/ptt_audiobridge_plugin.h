@@ -14,6 +14,8 @@ extern "C" {
 #include "janus/mutex.h"
 }
 
+#include "actor.h"
+
 #include "plugin_session.h"
 #include "ptt_room.h"
 
