@@ -123,7 +123,7 @@ void mute_participant(
 		json_object_set_new(info, "event", participant->muted ? json_string("muted") : json_string("unmuted"));
 		json_object_set_new(info, "room", json_string(audiobridge->room_id_str));
 		json_object_set(info, "ptt_id", json_ptt_id_ptr.get());
-		json_object_set(pub, "ptt_opaque", json_ptt_opaque_ptr.get());
+		json_object_set(info, "ptt_opaque", json_ptt_opaque_ptr.get());
 		json_object_set(info, "participant", participantInfo);
 
 		gateway->notify_event(&ptt_audiobridge_plugin, session ? session->handle : NULL, info);
