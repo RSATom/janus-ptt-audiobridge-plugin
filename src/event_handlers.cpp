@@ -744,7 +744,7 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 		janus_mutex_unlock(&rooms_mutex);
 		janus_mutex_lock(&audiobridge->mutex);
 		/* Set MJR recording status */
-		if(mjrs_active && mjrsdir) {
+		if(mjrsdir) {
 			/* Update the path where to save the MJR files */
 			char *old_mjrs_dir = audiobridge->mjrs_dir;
 			char *new_mjrs_dir = g_strdup(json_string_value(mjrsdir));
