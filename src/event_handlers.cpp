@@ -2211,6 +2211,9 @@ void* message_handler_thread(void* data) {
 			ptt_room *audiobridge = participant->room;
 			janus_mutex_lock(&audiobridge->mutex);
 
+			JANUS_LOG(LOG_INFO, "Trying to \"%s\" user \"%s\" in room \"%s\"...\n",
+				request_text, participant->user_id_str, audiobridge->room_id_str);
+
 			if(!muting && audiobridge->unmuted_participant && audiobridge->unmuted_participant != participant) {
 				// check if unmuted_participant was not active for too long time
 				gboolean mute_forced = FALSE;
