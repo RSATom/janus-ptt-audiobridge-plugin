@@ -2242,7 +2242,8 @@ void* message_handler_thread(void* data) {
 				janus_mutex_unlock(&unmuted_participant->qmutex);
 
 				if(!mute_forced) {
-					JANUS_LOG(LOG_INFO, "Room \"%s\" already has unmuted user\n", participant->room->room_id_str);
+					JANUS_LOG(LOG_INFO, "Can't umute user \"%s\". Room \"%s\" already has unmuted user \"%s\"\n",
+						participant->user_id_str, participant->room->room_id_str, unmuted_participant->user_id_str);
 					error_code = PTT_AUDIOBRIDGE_ERROR_ROOM_ALREADY_HAS_UNMUTED_USER;
 					g_snprintf(error_cause, 512, "Room \"%s\" already has unmuted user\n", participant->room->room_id_str);
 					janus_mutex_unlock(&audiobridge->mutex);
