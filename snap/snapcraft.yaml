@@ -37,6 +37,7 @@ parts:
     source: .
     cmake-parameters:
       - -DCMAKE_FIND_ROOT_PATH=/snap/janus-gateway/current
+      - -DCMAKE_BUILD_TYPE=Release
     after:
       - libsrtp
     build-snaps:
