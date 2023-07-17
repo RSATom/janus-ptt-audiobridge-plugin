@@ -120,6 +120,7 @@ static struct janus_json_parameter stop_rtp_forward_parameters[] = {
 static struct janus_json_parameter play_file_parameters[] = {
 	{"filename", JSON_STRING, JANUS_JSON_PARAM_REQUIRED},
 	{"file_id", JSON_STRING, 0},
+	{"opaque", JSON_STRING, 0},
 	{"unlink_on_stop", JANUS_JSON_BOOL, 0}
 };
 
@@ -1124,9 +1125,12 @@ static json_t* process_synchronous_request(plugin_session *session, json_t *mess
 			JANUS_LOG(LOG_VERB, "  -- Announcement ID: %s\n", file_id);
 		}
 
+		json_t* opaque = json_object_get(root, "opaque");
+		const char* opaque_text = opaque ? json_string_value(opaque) : nullptr;
+
 		const char* filename = json_string_value(json_object_get(root, "filename"));
 		const gboolean unlink_on_stop = json_is_true(json_object_get(root, "unlink_on_stop"));
-		audiobridge->files_to_play.emplace_back(file_id, filename, unlink_on_stop);
+		audiobridge->files_to_play.emplace_back(file_id, opaque_text, filename, unlink_on_stop);
 
 		/* Done, prepare response */
 		response = json_object();

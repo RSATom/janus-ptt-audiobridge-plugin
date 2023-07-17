@@ -25,12 +25,16 @@ namespace ptt_audiobridge
 {
 
 struct file_info {
-	file_info(const char* id, const char* path, bool unlink_on_finish) :
-		id(id ? id : "id"), path(path ? path : ""), unlink_on_finish(unlink_on_finish) {}
-	file_info(std::string&& id, std::string&& path, bool unlink_on_finish) :
-		id(id), path(path), unlink_on_finish(unlink_on_finish) {}
+	file_info(const char* id, const char* opaque, const char* path, bool unlink_on_finish) :
+		id(id ? id : "id"),
+		opaque(opaque ? std::string(opaque) : std::string()),
+		path(path ? std::string(path) : std::string()),
+		unlink_on_finish(unlink_on_finish) {}
+	file_info(std::string&& id, std::string&& opaque, std::string&& path, bool unlink_on_finish) :
+		id(id), opaque(opaque), path(path), unlink_on_finish(unlink_on_finish) {}
 
 	std::string id;
+	std::string opaque;
 	std::string path;
 	bool unlink_on_finish;
 };

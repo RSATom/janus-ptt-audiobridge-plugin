@@ -125,12 +125,15 @@ void notify_participants(ptt_room* room, json_t* msg) {
 }
 
 // ptt_room::mutex should be locked
-static void notify_playback_started(ptt_room* room, const std::string& file_id) {
+static void notify_playback_started(ptt_room* room, const std::string& file_id, const std::string& opaque) {
 	JANUS_LOG(LOG_INFO, "[%s] Playback started (%s)\n", room->room_id_str, file_id.c_str());
 	json_t *event = json_object();
 	json_object_set_new(event, "audiobridge", json_string("playback-started"));
 	json_object_set_new(event, "room", json_string(room->room_id_str));
 	json_object_set_new(event, "file_id", json_string(file_id.c_str()));
+	if(!opaque.empty()) {
+		json_object_set_new(event, "opaque", json_string(opaque.c_str()));
+	}
 	notify_participants(room, event);
 	json_decref(event);
 
@@ -140,6 +143,9 @@ static void notify_playback_started(ptt_room* room, const std::string& file_id) 
 		json_object_set_new(info, "event", json_string("playback-started"));
 		json_object_set_new(info, "room", json_string(room->room_id_str));
 		json_object_set_new(info, "file_id", json_string(file_id.c_str()));
+		if(!opaque.empty()) {
+			json_object_set_new(info, "opaque", json_string(opaque.c_str()));
+		}
 		gateway->notify_event(&ptt_audiobridge_plugin, NULL, info);
 	}
 }
@@ -333,7 +339,8 @@ void* room_sender_thread(void* data) {
 			audiobridge->files_to_play.pop_front();
 
 			audiobridge->playing_file = true;
-			notify_playback_started(audiobridge, now_playing_ptr->source_file.id);
+			const file_info& source_file_info = now_playing_ptr->source_file;
+			notify_playback_started(audiobridge, source_file_info.id, source_file_info.opaque);
 
 			now_playing_ptr->open();
 		}
