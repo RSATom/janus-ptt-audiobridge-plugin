@@ -2207,9 +2207,9 @@ void* message_handler_thread(void* data) {
 					goto error;
 			}
 
-			janus_mutex_lock(&rooms_mutex);
+			janus_mutex_lock_guard rooms_guard(&rooms_mutex);
 			ptt_room *audiobridge = participant->room;
-			janus_mutex_lock(&audiobridge->mutex);
+			janus_mutex_lock_guard audiobridge_guard(&audiobridge->mutex);
 
 			JANUS_LOG(LOG_INFO, "Trying to \"%s\" user \"%s\" in room \"%s\"...\n",
 				request_text, participant->user_id_str, audiobridge->room_id_str);
@@ -2218,7 +2218,7 @@ void* message_handler_thread(void* data) {
 				// check if unmuted_participant was not active for too long time
 				gboolean mute_forced = FALSE;
 				struct room_participant* unmuted_participant = audiobridge->unmuted_participant;
-				janus_mutex_lock(&unmuted_participant->qmutex);
+				janus_mutex_lock_guard queue_guard(&unmuted_participant->qmutex);
 				gint64 now = janus_get_monotonic_time();
 				if(now - MAX(unmuted_participant->inbuf_timestamp, unmuted_participant->unmuted_timestamp) > PTT_NO_AUDIO_TIMEOUT*G_USEC_PER_SEC) {
 					mute_forced = TRUE;
@@ -2242,15 +2242,12 @@ void* message_handler_thread(void* data) {
 					JANUS_LOG(LOG_VERB, "  >> %d (%s)\n", ret, janus_get_api_error(ret));
 					json_decref(pub);
 				}
-				janus_mutex_unlock(&unmuted_participant->qmutex);
 
 				if(!mute_forced) {
 					JANUS_LOG(LOG_INFO, "Can't umute user \"%s\". Room \"%s\" already has unmuted user \"%s\"\n",
 						participant->user_id_str, participant->room->room_id_str, unmuted_participant->user_id_str);
 					error_code = PTT_AUDIOBRIDGE_ERROR_ROOM_ALREADY_HAS_UNMUTED_USER;
 					g_snprintf(error_cause, 512, "Room \"%s\" already has unmuted user\n", participant->room->room_id_str);
-					janus_mutex_unlock(&audiobridge->mutex);
-					janus_mutex_unlock(&rooms_mutex);
 					goto error;
 				}
 			}
@@ -2258,8 +2255,6 @@ void* message_handler_thread(void* data) {
 				JANUS_LOG(LOG_ERR, "Room \"%s\" already playing file\n", participant->room->room_id_str);
 				error_code = PTT_AUDIOBRIDGE_ERROR_ROOM_ALREADY_PLAYING_FILE;
 				g_snprintf(error_cause, 512, "Room \"%s\" already playing file\n", participant->room->room_id_str);
-				janus_mutex_unlock(&audiobridge->mutex);
-				janus_mutex_unlock(&rooms_mutex);
 				goto error;
 			}
 
@@ -2282,8 +2277,6 @@ void* message_handler_thread(void* data) {
 			json_object_set_new(event, "result", json_string("ok"));
 			json_object_set_new(event, "ptt_id", json_ptt_id_ptr.release());
 
-			janus_mutex_unlock(&audiobridge->mutex);
-			janus_mutex_unlock(&rooms_mutex);
 		} else if(!strcasecmp(request_text, "changeroom")) {
 			/* The participant wants to leave the current room and join another one without reconnecting (e.g., a sidebar) */
 			JANUS_VALIDATE_JSON_OBJECT(root, join_parameters,
