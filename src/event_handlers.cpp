@@ -2214,6 +2214,13 @@ void* message_handler_thread(void* data) {
 			JANUS_LOG(LOG_INFO, "Trying to \"%s\" user \"%s\" in room \"%s\"...\n",
 				request_text, participant->user_id_str, audiobridge->room_id_str);
 
+			if(!muting && !participant->muted) {
+				JANUS_LOG(LOG_ERR, "User \"%s\" already unmuted in room \"%s\"\n",
+					participant->user_id_str, audiobridge->room_id_str);
+				error_code = PTT_AUDIOBRIDGE_ERROR_USER_ALREADY_UNMUTED;
+				g_snprintf(error_cause, 512, "User already unmuted\n");
+				goto error;
+			}
 			if(!muting && audiobridge->unmuted_participant && audiobridge->unmuted_participant != participant) {
 				// check if unmuted_participant was not active for too long time
 				gboolean mute_forced = FALSE;
@@ -2276,7 +2283,6 @@ void* message_handler_thread(void* data) {
 			json_object_set_new(event, "audiobridge", json_string("event"));
 			json_object_set_new(event, "result", json_string("ok"));
 			json_object_set_new(event, "ptt_id", json_ptt_id_ptr.release());
-
 		} else if(!strcasecmp(request_text, "changeroom")) {
 			/* The participant wants to leave the current room and join another one without reconnecting (e.g., a sidebar) */
 			JANUS_VALIDATE_JSON_OBJECT(root, join_parameters,
