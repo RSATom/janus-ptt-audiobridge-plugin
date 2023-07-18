@@ -33,10 +33,10 @@ struct file_info {
 	file_info(std::string&& id, std::string&& opaque, std::string&& path, bool unlink_on_finish) :
 		id(id), opaque(opaque), path(path), unlink_on_finish(unlink_on_finish) {}
 
-	std::string id;
-	std::string opaque;
-	std::string path;
-	bool unlink_on_finish;
+	const std::string id;
+	const std::string opaque;
+	const std::string path;
+	const bool unlink_on_finish;
 };
 
 struct ptt_room: public janus_refcount {
