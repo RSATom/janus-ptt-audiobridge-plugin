@@ -1,6 +1,6 @@
 /*! \file
  * \author Sergey Radionov <rsatom@gmail.com>
- * \copyright GNU General Public License v3
+ * \copyright MIT License
  */
 
 #pragma once
