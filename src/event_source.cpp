@@ -8,10 +8,6 @@
 #include <sys/eventfd.h>
 #include <unistd.h>
 
-extern "C" {
-#include "janus/debug.h"
-}
-
 namespace {
 
 struct EventSource
